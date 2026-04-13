@@ -1,0 +1,402 @@
+"use client";
+
+import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableRow,
+} from "../../../../components/ui/table";
+import Badge from "../../../../components/ui/badge/Badge";
+import Pagination from "@/components/tables/Pagination";
+import ConfirmationModal from "@/components/example/ModalExample/ConfirmationModal";
+import { productApi } from "@/api";
+
+interface ProductType {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  sortOrder: number;
+  status: "Active" | "Inactive";
+  createdAt: string;
+}
+
+interface ProductTypeApiItem {
+  id: string;
+  code?: string;
+  name: string;
+  description?: string | null;
+  is_active: boolean;
+  sort_order?: number;
+  created_at?: string;
+}
+
+interface ProductTypesApiResponse {
+  success?: boolean;
+  message?: string;
+  data: ProductTypeApiItem[];
+}
+
+export default function ProductCategory() {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [productTypes, setProductTypes] = useState<ProductType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState("");
+  const [deletingTypeId, setDeletingTypeId] = useState<string | null>(null);
+  const [deleteModal, setDeleteModal] = useState<{ open: boolean; id: string | null }>({
+    open: false,
+    id: null,
+  });
+
+  const itemsPerPage = 10;
+  const totalPages = Math.max(1, Math.ceil(productTypes.length / itemsPerPage));
+
+  const getApiErrorMessage = (error: unknown): string => {
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
+
+    if (typeof error === "object" && error !== null && "response" in error) {
+      const response = (error as { response?: { data?: { message?: string } } }).response;
+      if (response?.data?.message) {
+        return response.data.message;
+      }
+    }
+
+    return "Failed to fetch product categories.";
+  };
+
+  useEffect(() => {
+    const fetchProductTypes = async () => {
+      setLoading(true);
+      setApiError("");
+
+      try {
+        const res = await productApi.getProductTypes<ProductTypesApiResponse>();
+
+        const mapped: ProductType[] = (res.data || []).map((item) => ({
+          id: item.id,
+          code: item.code || "-",
+          name: item.name,
+          description: item.description || "No description",
+          sortOrder: item.sort_order ?? 0,
+          status: item.is_active ? "Active" : "Inactive",
+          createdAt: item.created_at
+            ? new Date(item.created_at).toLocaleDateString("en-US", {
+                month: "short",
+                day: "2-digit",
+                year: "numeric",
+              })
+            : "-",
+        }));
+
+        setProductTypes(mapped);
+      } catch (error: unknown) {
+        setApiError(getApiErrorMessage(error));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProductTypes();
+  }, []);
+
+  const paginatedData = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return productTypes.slice(startIndex, startIndex + itemsPerPage);
+  }, [currentPage, productTypes]);
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteModal.id || deletingTypeId) {
+      return;
+    }
+
+    setApiError("");
+    setDeletingTypeId(deleteModal.id);
+
+    try {
+      await productApi.deleteProductType(deleteModal.id);
+      setProductTypes((prev) => prev.filter((t) => t.id !== deleteModal.id));
+    } catch (error: unknown) {
+      setApiError(getApiErrorMessage(error));
+    } finally {
+      setDeletingTypeId(null);
+    }
+  };
+
+  return (
+    <>
+      {apiError && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
+          {apiError}
+        </div>
+      )}
+
+      <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+        <div className="flex flex-col gap-3 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-white/[0.05]">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">Product Categories</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Manage product type/category definitions
+            </p>
+          </div>
+
+          <Link
+            href="/admin/product-category/add"
+            className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Add Product Category
+          </Link>
+        </div>
+
+        <div className="hidden md:block max-w-full overflow-x-auto">
+          <div className="min-w-[920px]">
+            <Table>
+              <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+                <TableRow>
+                  <TableCell isHeader className="px-5 py-3 text-left text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                    Name
+                  </TableCell>
+                  <TableCell isHeader className="px-5 py-3 text-left text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                    Code
+                  </TableCell>
+                  <TableCell isHeader className="px-5 py-3 text-left text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                    Sort Order
+                  </TableCell>
+                  <TableCell isHeader className="px-5 py-3 text-left text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                    Status
+                  </TableCell>
+                  <TableCell isHeader className="px-5 py-3 text-left text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                    Created
+                  </TableCell>
+                  <TableCell isHeader className="px-5 py-3 text-right text-theme-xs font-medium text-gray-500 dark:text-gray-400">
+                    Actions
+                  </TableCell>
+                </TableRow>
+              </TableHeader>
+
+              <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
+                {loading && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+                      Loading product categories...
+                    </TableCell>
+                  </TableRow>
+                )}
+
+                {!loading && paginatedData.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+                      No product categories found.
+                    </TableCell>
+                  </TableRow>
+                )}
+
+                {paginatedData.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="px-5 py-4 text-start">
+                      <div className="min-w-0">
+                        <span className="block truncate text-theme-sm font-medium text-gray-800 dark:text-white/90">
+                          {item.name}
+                        </span>
+                        <span className="block text-theme-xs text-gray-500 dark:text-gray-400 truncate max-w-[260px]">
+                          {item.description}
+                        </span>
+                      </div>
+                    </TableCell>
+
+                    <TableCell className="px-5 py-4 text-theme-sm text-gray-500 dark:text-gray-400">
+                      <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-mono text-gray-600 dark:bg-white/[0.05] dark:text-gray-400">
+                        {item.code}
+                      </span>
+                    </TableCell>
+
+                    <TableCell className="px-5 py-4 text-theme-sm text-gray-500 dark:text-gray-400">
+                      {item.sortOrder}
+                    </TableCell>
+
+                    <TableCell className="px-5 py-4 text-theme-sm text-gray-500 dark:text-gray-400">
+                      <Badge size="sm" color={item.status === "Active" ? "success" : "error"}>
+                        {item.status}
+                      </Badge>
+                    </TableCell>
+
+                    <TableCell className="px-5 py-4 text-theme-sm text-gray-500 dark:text-gray-400">
+                      {item.createdAt}
+                    </TableCell>
+
+                    <TableCell className="px-5 py-4">
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/admin/product-category/${item.id}`}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-500/10 dark:hover:text-blue-400 transition-colors"
+                          title="View product category"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.964-7.178z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                        </Link>
+
+                        <Link
+                          href={`/admin/product-category/${item.id}/edit`}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-500/10 dark:hover:text-amber-400 transition-colors"
+                          title="Edit product category"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                          </svg>
+                        </Link>
+
+                        <button
+                          onClick={() => setDeleteModal({ open: true, id: item.id })}
+                          disabled={deletingTypeId === item.id}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400 transition-colors"
+                          title="Delete product category"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                          </svg>
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+
+        <div className="grid gap-4 p-4 md:hidden">
+          {loading && (
+            <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-500 dark:border-white/[0.05] dark:bg-white/[0.03] dark:text-gray-400">
+              Loading product categories...
+            </div>
+          )}
+
+          {!loading && paginatedData.length === 0 && (
+            <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-500 dark:border-white/[0.05] dark:bg-white/[0.03] dark:text-gray-400">
+              No product categories found.
+            </div>
+          )}
+
+          {paginatedData.map((item) => (
+            <div
+              key={item.id}
+              className="rounded-xl border border-gray-200 bg-white p-4 dark:border-white/[0.05] dark:bg-white/[0.03]"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <h4 className="truncate text-sm font-semibold text-gray-800 dark:text-white/90">
+                    {item.name}
+                  </h4>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">
+                    {item.description}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <Link
+                    href={`/admin/product-category/${item.id}`}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.964-7.178z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </Link>
+                  <Link
+                    href={`/admin/product-category/${item.id}/edit`}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-amber-50 hover:text-amber-600 transition-colors"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                    </svg>
+                  </Link>
+                  <button
+                    onClick={() => setDeleteModal({ open: true, id: item.id })}
+                    disabled={deletingTypeId === item.id}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Code</p>
+                  <p className="text-sm font-mono font-medium text-gray-800 dark:text-white/90">{item.code}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Sort Order</p>
+                  <p className="text-sm font-medium text-gray-800 dark:text-white/90">{item.sortOrder}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Created</p>
+                  <p className="text-sm font-medium text-gray-800 dark:text-white/90">{item.createdAt}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Status</p>
+                  <div className="mt-1">
+                    <Badge size="sm" color={item.status === "Active" ? "success" : "error"}>
+                      {item.status}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {!loading && productTypes.length > 0 && (
+          <div className="border-t border-gray-100 px-4 py-4 sm:px-5 dark:border-white/[0.05]">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Showing{" "}
+                <span className="font-medium text-gray-700 dark:text-white/90">
+                  {(currentPage - 1) * itemsPerPage + 1}
+                </span>{" "}
+                to{" "}
+                <span className="font-medium text-gray-700 dark:text-white/90">
+                  {Math.min(currentPage * itemsPerPage, productTypes.length)}
+                </span>{" "}
+                of{" "}
+                <span className="font-medium text-gray-700 dark:text-white/90">{productTypes.length}</span>{" "}
+                product categories
+              </p>
+              <div className="overflow-x-auto">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={(page) => {
+                    if (page >= 1 && page <= totalPages) setCurrentPage(page);
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <ConfirmationModal
+        isOpen={deleteModal.open}
+        onClose={() => setDeleteModal({ open: false, id: null })}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Product Category"
+        message="Are you sure you want to delete this product category? This action cannot be undone."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+      />
+    </>
+  );
+}
