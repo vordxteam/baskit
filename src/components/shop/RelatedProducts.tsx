@@ -23,7 +23,7 @@ export default function RelatedProducts({ products }: { products: Product[] }) {
           More related products
         </h2>
         <Link
-          href="/products"
+          href="/product"
           className="text-[13px] sm:text-[18px] border border-[#252525] px-5 py-3 text-[#252525] hover:bg-[#252525] hover:text-white transition-colors font-normal"
         >
           View more

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Table,
@@ -12,40 +12,121 @@ import {
 import Badge from "../../../../components/ui/badge/Badge";
 import Pagination from "@/components/tables/Pagination";
 import ConfirmationModal from "@/components/example/ModalExample/ConfirmationModal";
+import { productApi } from "@/api";
 
 interface Product {
-  id: number;
+  id: string;
   product: {
     name: string;
     category: string;
   };
   sku: string;
   stock: number;
-  status: "In Stock" | "Low Stock" | "Out of Stock";
+  tier: string;
+  slug: string;
+  status: "ACTIVE" | "INACTIVE";
   price: string;
 }
 
-const tableData: Product[] = [
-  { id: 1, product: { name: "Wireless Headphones", category: "Electronics" }, sku: "WH-1024", stock: 48, status: "In Stock", price: "$129.00" },
-  { id: 2, product: { name: "Smart Watch Pro", category: "Wearables" }, sku: "SW-2048", stock: 12, status: "Low Stock", price: "$249.00" },
-  { id: 3, product: { name: "Bluetooth Speaker", category: "Audio" }, sku: "BS-3091", stock: 0, status: "Out of Stock", price: "$89.00" },
-  { id: 4, product: { name: "Gaming Mouse", category: "Accessories" }, sku: "GM-4455", stock: 27, status: "In Stock", price: "$59.00" },
-  { id: 5, product: { name: "Mechanical Keyboard", category: "Accessories" }, sku: "MK-7788", stock: 9, status: "Low Stock", price: "$139.00" },
-  { id: 6, product: { name: "4K Monitor", category: "Displays" }, sku: "MN-9001", stock: 16, status: "In Stock", price: "$399.00" },
-  { id: 7, product: { name: "USB-C Hub", category: "Gadgets" }, sku: "UH-2210", stock: 0, status: "Out of Stock", price: "$45.00" },
-  { id: 8, product: { name: "Portable SSD", category: "Storage" }, sku: "PS-6543", stock: 33, status: "In Stock", price: "$179.00" },
-  { id: 9, product: { name: "Portable SSD", category: "Storage" }, sku: "PS-6543", stock: 33, status: "In Stock", price: "$179.00" },
-  { id: 10, product: { name: "Portable SSD", category: "Storage" }, sku: "PS-6543", stock: 33, status: "In Stock", price: "$179.00" },
-  { id: 11, product: { name: "Portable SSD", category: "Storage" }, sku: "PS-6543", stock: 33, status: "In Stock", price: "$179.00" },
-];
+interface ApiProductSize {
+  stock_quantity?: number;
+}
+
+interface ApiProduct {
+  id: string;
+  name?: string;
+  sku?: string;
+  categories?: string[];
+  status?: string;
+  tier?: string;
+  slug?: string;
+  price?: string | number;
+  sizes?: ApiProductSize[];
+}
+
+interface ProductsApiResponse {
+  success?: boolean;
+  message?: string;
+  data?: ApiProduct[];
+}
+
+const mapApiProducts = (apiProducts: any): Product[] => {
+  const productsArray = Array.isArray(apiProducts)
+    ? apiProducts
+    : apiProducts?.data || apiProducts?.products || [];
+
+  return productsArray.map((item: ApiProduct) => {
+    const numericPrice = Number(item.price ?? 0);
+    const safePrice = Number.isFinite(numericPrice) ? numericPrice : 0;
+    const stock = (item.sizes || []).reduce(
+      (sum, size) => sum + (size.stock_quantity || 0),
+      0
+    );
+    const categoryCount = item.categories?.length || 0;
+
+    return {
+      id: item.id,
+      product: {
+        name: item.name || "Untitled product",
+        category:
+          categoryCount > 0
+            ? `${categoryCount} categor${categoryCount > 1 ? "ies" : "y"}`
+            : "No category",
+      },
+      sku: item.sku || "-",
+      stock,
+      slug: item.slug || "-",
+      tier: item.tier || "-",
+      status: item.status === "INACTIVE" ? "INACTIVE" : "ACTIVE",
+      price: `$${safePrice.toFixed(2)}`,
+    };
+  });
+};
 
 export default function ProductsTable() {
   const [currentPage, setCurrentPage] = useState(1);
-  const [products, setProducts] = useState<Product[]>(tableData);
-  const [deleteModal, setDeleteModal] = useState<{ open: boolean; id: number | null }>({ open: false, id: null });
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteModal, setDeleteModal] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
 
   const itemsPerPage = 10;
-  const totalPages = Math.ceil(products.length / itemsPerPage);
+  const totalPages = Math.max(1, Math.ceil(products.length / itemsPerPage));
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchProducts = async () => {
+      setIsLoading(true);
+      setFetchError("");
+
+      try {
+        const res = await productApi.getAdminProducts<ProductsApiResponse>();
+        const mapped = mapApiProducts(res.data || []);
+
+        if (!isMounted) return;
+
+        setProducts(mapped);
+        setCurrentPage(1);
+      } catch (error) {
+        if (!isMounted) return;
+
+        console.error("Error fetching products:", error);
+        setFetchError("Failed to load products. Please refresh and try again.");
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchProducts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const paginatedData = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -53,9 +134,31 @@ export default function ProductsTable() {
   }, [currentPage, products]);
 
   const handleDeleteConfirm = () => {
-    if (deleteModal.id !== null) {
-      setProducts((prev) => prev.filter((p) => p.id !== deleteModal.id));
-    }
+    const productId = deleteModal.id;
+    if (!productId || isDeleting) return;
+
+    const runDelete = async () => {
+      try {
+        setIsDeleting(true);
+        setFetchError("");
+        await productApi.deleteProduct(productId);
+
+        setProducts((prev) => {
+          const next = prev.filter((p) => p.id !== productId);
+          const nextTotalPages = Math.max(1, Math.ceil(next.length / itemsPerPage));
+          setCurrentPage((prevPage) => Math.min(prevPage, nextTotalPages));
+          return next;
+        });
+      } catch (error) {
+        console.error("Delete product failed:", error);
+        setFetchError("Failed to delete product. Please try again.");
+      } finally {
+        setIsDeleting(false);
+        setDeleteModal({ open: false, id: null });
+      }
+    };
+
+    void runDelete();
   };
 
   return (
@@ -80,6 +183,28 @@ export default function ProductsTable() {
           </Link>
         </div>
 
+        {fetchError && (
+          <div className="mx-5 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
+            {fetchError}
+          </div>
+        )}
+
+        {isLoading && (
+          <div className="p-10 text-center">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Loading products...</p>
+          </div>
+        )}
+
+        {!isLoading && products.length === 0 && (
+          <div className="p-10 text-center">
+            <h4 className="text-base font-medium text-gray-800 dark:text-white/90">No products found</h4>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Create your first product to start building your inventory.</p>
+          </div>
+        )}
+
+        {!isLoading && products.length > 0 && (
+          <>
+
         {/* Desktop Table */}
         <div className="hidden md:block max-w-full overflow-x-auto">
           <div className="min-w-[860px]">
@@ -88,7 +213,8 @@ export default function ProductsTable() {
                 <TableRow>
                   <TableCell isHeader className="px-5 py-3 text-left text-theme-xs font-medium text-gray-500 dark:text-gray-400">Product</TableCell>
                   <TableCell isHeader className="px-5 py-3 text-left text-theme-xs font-medium text-gray-500 dark:text-gray-400">SKU</TableCell>
-                  <TableCell isHeader className="px-5 py-3 text-left text-theme-xs font-medium text-gray-500 dark:text-gray-400">Stock</TableCell>
+                  <TableCell isHeader className="px-5 py-3 text-left text-theme-xs font-medium text-gray-500 dark:text-gray-400">Slug</TableCell>
+                  <TableCell isHeader className="px-5 py-3 text-left text-theme-xs font-medium text-gray-500 dark:text-gray-400">Tier</TableCell>
                   <TableCell isHeader className="px-5 py-3 text-left text-theme-xs font-medium text-gray-500 dark:text-gray-400">Status</TableCell>
                   <TableCell isHeader className="px-5 py-3 text-left text-theme-xs font-medium text-gray-500 dark:text-gray-400">Price</TableCell>
                   <TableCell isHeader className="px-5 py-3 text-right text-theme-xs font-medium text-gray-500 dark:text-gray-400">Actions</TableCell>
@@ -106,10 +232,11 @@ export default function ProductsTable() {
                     </TableCell>
 
                     <TableCell className="px-5 py-4 text-theme-sm text-gray-500 dark:text-gray-400">{item.sku}</TableCell>
-                    <TableCell className="px-5 py-4 text-theme-sm text-gray-500 dark:text-gray-400">{item.stock}</TableCell>
+                    <TableCell className="px-5 py-4 text-theme-sm text-gray-500 dark:text-gray-400">{item.slug}</TableCell>
+                    <TableCell className="px-5 py-4 text-theme-sm text-gray-500 dark:text-gray-400">{item.tier}</TableCell>
 
                     <TableCell className="px-5 py-4 text-theme-sm text-gray-500 dark:text-gray-400">
-                      <Badge size="sm" color={item.status === "In Stock" ? "success" : item.status === "Low Stock" ? "warning" : "error"}>
+                      <Badge size="sm" color={item.status === "ACTIVE" ? "success" : "error"}>
                         {item.status}
                       </Badge>
                     </TableCell>
@@ -207,7 +334,7 @@ export default function ProductsTable() {
                 <div>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Status</p>
                   <div className="mt-1">
-                    <Badge size="sm" color={item.status === "In Stock" ? "success" : item.status === "Low Stock" ? "warning" : "error"}>
+                    <Badge size="sm" color={item.status === "ACTIVE" ? "success" : "error"}>
                       {item.status}
                     </Badge>
                   </div>
@@ -240,16 +367,23 @@ export default function ProductsTable() {
             </div>
           </div>
         </div>
+
+          </>
+        )}
       </div>
 
       {/* Delete Confirmation Modal */}
       <ConfirmationModal
         isOpen={deleteModal.open}
-        onClose={() => setDeleteModal({ open: false, id: null })}
+        onClose={() => {
+          if (!isDeleting) {
+            setDeleteModal({ open: false, id: null });
+          }
+        }}
         onConfirm={handleDeleteConfirm}
         title="Delete Product"
         message="Are you sure you want to delete this product? This action is permanent and cannot be undone."
-        confirmLabel="Delete"
+        confirmLabel={isDeleting ? "Deleting..." : "Delete"}
         cancelLabel="Cancel"
         variant="danger"
       />

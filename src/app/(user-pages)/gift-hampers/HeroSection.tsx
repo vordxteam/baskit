@@ -1,5 +1,6 @@
 import Button from "@/components/ui/button/Button";
 import React from "react";
+import Link from "next/link";
 
 const HeroSection = () => {
   return (
@@ -22,10 +23,12 @@ const HeroSection = () => {
             Want something truly personal?
             Customize your bouquet or basket your way.
           </h1>
-
+          <Link href="/get-a-qoute">
+          
           <Button variant="primary">
             Get a quote
           </Button>
+          </Link>
         </div>
       </div>
     </section>

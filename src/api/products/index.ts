@@ -15,7 +15,6 @@ import {
 	UpdateCatalogItemPayload,
 	UpdateProductComponentPayload,
 	UpdateProductFullPayload,
-	UpdateProductPayload,
 	UpdateProductSizePayload,
 	UpdateProductStatusPayload,
 	UpdateProductTypePayload,
@@ -35,14 +34,102 @@ export class ProductApi {
 	}
 
 	async createProduct<TResponse = unknown>(payload: CreateProductPayload): Promise<TResponse> {
-		return apiClient.post<TResponse>(`${this.adminBaseEndpoint}/products/simple`, payload);
+		const mediaWithBase64 = await Promise.all(
+			payload.media.map(async (mediaItem, index) => {
+				const base64 = await new Promise<string>((resolve, reject) => {
+					const reader = new FileReader();
+					reader.onload = () => resolve(reader.result as string);
+					reader.onerror = reject;
+					reader.readAsDataURL(mediaItem.image as File);
+				});
+				return {
+					image: base64,
+					is_primary: index === 0,
+					sort_order: index,
+				};
+			})
+		);
+
+		const jsonPayload = {
+			product: payload.product,
+			category_ids: payload.category_ids,
+			items: payload.items,
+			...(mediaWithBase64.length > 0 ? { media: mediaWithBase64 } : {}),
+		};
+
+		const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+		const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+
+		const response = await fetch(`${baseUrl}${this.adminBaseEndpoint}/products/simple`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'Accept': 'application/json',
+				...(token ? { Authorization: `Bearer ${token}` } : {}),
+			},
+			credentials: 'include',
+			body: JSON.stringify(jsonPayload),
+		});
+
+		const text = await response.text();
+		const data = text ? JSON.parse(text) : null;
+
+		if (!response.ok) {
+			throw new Error(data?.message || 'Failed to create product');
+		}
+
+		return data as TResponse;
 	}
 
 	async updateProduct<TResponse = unknown>(
 		id: string,
-		payload: UpdateProductPayload
+		payload: CreateProductPayload
 	): Promise<TResponse> {
-		return apiClient.put<TResponse>(`${this.adminBaseEndpoint}/products/${id}`, payload);
+		const mediaWithBase64 = await Promise.all(
+			payload.media.map(async (mediaItem, index) => {
+				const base64 = await new Promise<string>((resolve, reject) => {
+					const reader = new FileReader();
+					reader.onload = () => resolve(reader.result as string);
+					reader.onerror = reject;
+					reader.readAsDataURL(mediaItem.image as File);
+				});
+				return {
+					image: base64,
+					is_primary: index === 0,
+					sort_order: index,
+				};
+			})
+		);
+
+		const jsonPayload = {
+			product: payload.product,
+			category_ids: payload.category_ids,
+			items: payload.items,
+			...(mediaWithBase64.length > 0 ? { media: mediaWithBase64 } : {}),
+		};
+
+		const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+		const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+
+		const response = await fetch(`${baseUrl}${this.adminBaseEndpoint}/products/${id}`, {
+			method: 'PUT',
+			headers: {
+				'Content-Type': 'application/json',
+				'Accept': 'application/json',
+				...(token ? { Authorization: `Bearer ${token}` } : {}),
+			},
+			credentials: 'include',
+			body: JSON.stringify(jsonPayload),
+		});
+
+		const text = await response.text();
+		const data = text ? JSON.parse(text) : null;
+
+		if (!response.ok) {
+			throw new Error(data?.message || 'Failed to update product');
+		}
+
+		return data as TResponse;
 	}
 
 	async deleteProduct<TResponse = ApiMessageResponse>(id: string): Promise<TResponse> {
@@ -99,8 +186,8 @@ export class ProductApi {
 	}
 
 	// Admin: Product Types
-	async getProductTypes<TResponse = unknown>(): Promise<TResponse> {
-		return apiClient.get<TResponse>(`${this.adminBaseEndpoint}/product-types`);
+	async getProductTypes<TResponse = unknown>(params?: GetProductsQuery): Promise<TResponse> {
+		return apiClient.get<TResponse>(`${this.adminBaseEndpoint}/product-types`, params as Record<string, any>);
 	}
 
 	async getProductTypeById<TResponse = unknown>(id: string): Promise<TResponse> {

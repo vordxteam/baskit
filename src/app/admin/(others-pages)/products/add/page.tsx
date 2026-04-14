@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { productApi, type CreateProductPayload } from "@/api";
@@ -56,6 +56,7 @@ const initialForm: ProductFormState = {
 
 export default function AddProductPage() {
   const router = useRouter();
+  const isSubmittingRef = useRef(false);
   const [form, setForm] = useState<ProductFormState>(initialForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -69,8 +70,8 @@ export default function AddProductPage() {
       try {
         setIsLoadingOptions(true);
         const [typesRes, categoryRes] = await Promise.all([
-          productApi.getProductTypes<ProductTypeApiResponse>(),
-          productApi.getCategory<CategoryApiResponse>(),
+          productApi.getProductTypes<ProductTypeApiResponse>({ is_active: true }),
+          productApi.getCategory<CategoryApiResponse>({ is_active: true }),
         ]);
 
         setProductTypes(typesRes.data || []);
@@ -105,21 +106,6 @@ export default function AddProductPage() {
     return newErrors;
   };
 
-  const fileToBase64DataUrl = (file: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result;
-        if (typeof result === "string") {
-          resolve(result);
-          return;
-        }
-        reject(new Error("Failed to convert image file"));
-      };
-      reader.onerror = () => reject(new Error("Failed to read image file"));
-      reader.readAsDataURL(file);
-    });
-
   const handleChange = (field: keyof ProductFormState, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     setErrors((prev) => {
@@ -132,15 +118,23 @@ export default function AddProductPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevent double submission
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+
     setApiError("");
     const validationErrors = validate();
     setErrors(validationErrors);
-    if (Object.keys(validationErrors).length > 0) return;
+    if (Object.keys(validationErrors).length > 0) {
+      isSubmittingRef.current = false;
+      return;
+    }
 
     setIsSubmitting(true);
 
     try {
-      const media = await Promise.all(form.images.map(async (file) => ({ image: await fileToBase64DataUrl(file) })));
+      const media = form.images.map((file) => ({ image: file }));
 
       const items = form.items
         .filter((item) => item.name.trim() && item.quantity.trim())
@@ -165,6 +159,8 @@ export default function AddProductPage() {
         items,
       };
 
+      console.log("Submitting product with payload:", payload);
+
       await productApi.createProduct(payload);
       router.push("/admin/products");
     } catch (error) {
@@ -172,6 +168,7 @@ export default function AddProductPage() {
       setApiError("Failed to create product.");
     } finally {
       setIsSubmitting(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -227,7 +224,7 @@ export default function AddProductPage() {
             <div className="px-6 py-5 grid gap-5 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Product Type <span className="text-red-500">*</span>
+                  Product Category <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={form.product_type_id}
@@ -271,7 +268,7 @@ export default function AddProductPage() {
               {/* Category */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Category ID <span className="text-red-500">*</span>
+                  Ocassions <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={form.category_id}
@@ -373,7 +370,8 @@ export default function AddProductPage() {
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400 dark:text-gray-500 pointer-events-none">$</span>
                   <input
-                    type="text"
+                    type="number"
+                    step="0.01"
                     value={form.price}
                     onChange={(e) => handleChange("price", e.target.value)}
                     placeholder="24.99"
@@ -409,7 +407,8 @@ export default function AddProductPage() {
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400 dark:text-gray-500 pointer-events-none">$</span>
                   <input
-                    type="text"
+                    type="number"
+                    step="0.01"
                     value={form.compare_at_price}
                     onChange={(e) => handleChange("compare_at_price", e.target.value)}
                     placeholder="29.99"

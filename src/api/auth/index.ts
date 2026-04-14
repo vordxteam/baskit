@@ -105,8 +105,15 @@ export class AuthAPI {
    */
   async signOut(): Promise<SignOutResponse> {
     try {
+      const accessToken = await this.getAccessToken();
       const response = await apiClient.post<SignOutResponse>(
-        `${this.baseEndpoint}/logout`
+        `${this.baseEndpoint}/logout`,
+        undefined,
+        {
+          headers: accessToken
+            ? { Authorization: `Bearer ${accessToken}` }
+            : undefined,
+        }
       );
 
       // Clear tokens and auth header

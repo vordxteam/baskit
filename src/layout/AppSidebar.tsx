@@ -42,7 +42,7 @@ const navItems: NavItem[] = [
   },
   {
     icon: <GridIcon />,
-    name: "Product Type",
+    name: "Product Categories",
     path: "/admin/product-category",
   },
   {

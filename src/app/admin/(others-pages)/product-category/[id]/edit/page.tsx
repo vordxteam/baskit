@@ -6,6 +6,8 @@ import { useRouter, useParams } from "next/navigation";
 import Badge from "@/components/ui/badge/Badge";
 import { productApi } from "@/api";
 
+const PRODUCT_TYPE_CODE_OPTIONS = ["BOUQUET", "BASKET"] as const;
+
 interface ProductTypeDetailsApiResponse {
   success?: boolean;
   message?: string;
@@ -55,6 +57,9 @@ export default function EditProductCategoryPage() {
 
   const validate = () => {
     const newErrors: Partial<typeof form> = {};
+    if (!PRODUCT_TYPE_CODE_OPTIONS.includes(form.code as (typeof PRODUCT_TYPE_CODE_OPTIONS)[number])) {
+      newErrors.code = "Code must be BOUQUET or BASKET.";
+    }
     if (!form.name.trim()) newErrors.name = "Name is required.";
     if (!form.description.trim()) newErrors.description = "Description is required.";
     if (!form.sortOrder.trim() || Number.isNaN(Number(form.sortOrder))) {
@@ -83,8 +88,11 @@ export default function EditProductCategoryPage() {
           return;
         }
 
+        const normalizedCode = (type.code || "").toUpperCase();
         setForm({
-          code: type.code || "",
+          code: PRODUCT_TYPE_CODE_OPTIONS.includes(normalizedCode as (typeof PRODUCT_TYPE_CODE_OPTIONS)[number])
+            ? normalizedCode
+            : "",
           name: type.name || "",
           description: type.description || "",
           sortOrder: String(type.sort_order ?? 0),
@@ -128,6 +136,7 @@ export default function EditProductCategoryPage() {
     try {
       setIsSaving(true);
       await productApi.updateProductType(typeId, {
+        code: form.code,
         name: form.name.trim(),
         description: form.description.trim(),
         is_active: form.status === "Active",
@@ -175,13 +184,29 @@ export default function EditProductCategoryPage() {
         <form onSubmit={handleSubmit} noValidate>
           <div className="divide-y divide-gray-100 dark:divide-white/5">
             <div className="px-5 py-5">
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-white/80">Code</label>
-              <input
-                type="text"
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-white/80">
+                Code <span className="text-red-500">*</span>
+              </label>
+              <select
                 value={form.code}
-                disabled
-                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-500 dark:border-white/8 dark:bg-white/3 dark:text-gray-400"
-              />
+                onChange={(e) => setForm((prev) => ({ ...prev, code: e.target.value }))}
+                disabled={isLoading || isSaving}
+                className={`w-full rounded-lg border px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-colors dark:bg-transparent dark:text-white/90 ${
+                  errors.code
+                    ? "border-red-400 focus:border-red-400 dark:border-red-500"
+                    : "border-gray-300 focus:border-brand-500 dark:border-white/10 dark:focus:border-brand-500"
+                }`}
+              >
+                <option value="" disabled>
+                  Select code
+                </option>
+                {PRODUCT_TYPE_CODE_OPTIONS.map((codeOption) => (
+                  <option key={codeOption} value={codeOption}>
+                    {codeOption}
+                  </option>
+                ))}
+              </select>
+              {errors.code && <p className="mt-1.5 text-xs text-red-500">{errors.code}</p>}
             </div>
 
             <div className="px-5 py-5">

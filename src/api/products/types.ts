@@ -35,6 +35,7 @@ export interface CreateProductTypePayload {
 }
 
 export interface UpdateProductTypePayload {
+	code: string;
 	name: string;
 	description: string;
 	is_active: boolean;
@@ -50,6 +51,7 @@ export const CREATE_PRODUCT_TYPE_PAYLOAD_EXAMPLE: CreateProductTypePayload = {
 };
 
 export const UPDATE_PRODUCT_TYPE_PAYLOAD_EXAMPLE: UpdateProductTypePayload = {
+	code: 'BOUQUET',
 	name: 'Premium Bouquet',
 	description: 'Luxury flower bouquets',
 	is_active: true,
@@ -221,7 +223,7 @@ export interface Product {
 }
 
 export interface Media {
-  image: string; // base64 string
+	image: File | Blob;
 }
 
 export interface Item {

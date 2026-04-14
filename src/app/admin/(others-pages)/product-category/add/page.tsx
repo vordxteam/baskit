@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { productApi, type ApiMessageResponse } from "@/api";
 
+const PRODUCT_TYPE_CODE_OPTIONS = ["BOUQUET", "BASKET"] as const;
+
 export default function AddProductCategoryPage() {
   const router = useRouter();
 
@@ -38,7 +40,9 @@ export default function AddProductCategoryPage() {
   const validate = () => {
     const newErrors: Partial<typeof form> = {};
 
-    if (!form.code.trim()) newErrors.code = "Code is required.";
+    if (!PRODUCT_TYPE_CODE_OPTIONS.includes(form.code as (typeof PRODUCT_TYPE_CODE_OPTIONS)[number])) {
+      newErrors.code = "Code must be BOUQUET or BASKET.";
+    }
     if (!form.name.trim()) newErrors.name = "Name is required.";
     if (!form.description.trim()) newErrors.description = "Description is required.";
     if (!form.sortOrder.trim() || Number.isNaN(Number(form.sortOrder))) {
@@ -63,7 +67,7 @@ export default function AddProductCategoryPage() {
 
     try {
       const payload = {
-        code: form.code.trim(),
+        code: form.code,
         name: form.name.trim(),
         description: form.description.trim(),
         is_active: form.status === "Active",
@@ -117,17 +121,24 @@ export default function AddProductCategoryPage() {
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-white/80">
                 Code <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
+              <select
                 value={form.code}
                 onChange={(e) => setForm((prev) => ({ ...prev, code: e.target.value }))}
-                placeholder="e.g. BASKET"
                 className={`w-full rounded-lg border px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none transition-colors dark:bg-transparent dark:text-white/90 dark:placeholder-gray-500 ${
                   errors.code
                     ? "border-red-400 focus:border-red-400 dark:border-red-500"
                     : "border-gray-300 focus:border-brand-500 dark:border-white/[0.1] dark:focus:border-brand-500"
                 }`}
-              />
+              >
+                <option value="" disabled>
+                  Select code
+                </option>
+                {PRODUCT_TYPE_CODE_OPTIONS.map((codeOption) => (
+                  <option key={codeOption} value={codeOption}>
+                    {codeOption}
+                  </option>
+                ))}
+              </select>
               {errors.code && <p className="mt-1.5 text-xs text-red-500">{errors.code}</p>}
             </div>
 

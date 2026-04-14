@@ -5,34 +5,88 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import Badge from "@/components/ui/badge/Badge";
 import ConfirmationModal from "@/components/example/ModalExample/ConfirmationModal";
+import { productApi } from "@/api";
 
-const allProducts = [
-  { id: 1, product: { name: "Wireless Headphones", category: "Electronics" }, sku: "WH-1024", stock: 48, status: "In Stock" as const, price: "$129.00", description: "Premium wireless headphones with noise cancellation and 30-hour battery life. Foldable design for easy portability." },
-  { id: 2, product: { name: "Smart Watch Pro", category: "Wearables" }, sku: "SW-2048", stock: 12, status: "Low Stock" as const, price: "$249.00", description: "Advanced smartwatch with health tracking, GPS, and a 5-day battery." },
-  { id: 3, product: { name: "Bluetooth Speaker", category: "Audio" }, sku: "BS-3091", stock: 0, status: "Out of Stock" as const, price: "$89.00", description: "" },
-  { id: 4, product: { name: "Gaming Mouse", category: "Accessories" }, sku: "GM-4455", stock: 27, status: "In Stock" as const, price: "$59.00", description: "" },
-  { id: 5, product: { name: "Mechanical Keyboard", category: "Accessories" }, sku: "MK-7788", stock: 9, status: "Low Stock" as const, price: "$139.00", description: "" },
-  { id: 6, product: { name: "4K Monitor", category: "Displays" }, sku: "MN-9001", stock: 16, status: "In Stock" as const, price: "$399.00", description: "" },
-  { id: 7, product: { name: "USB-C Hub", category: "Gadgets" }, sku: "UH-2210", stock: 0, status: "Out of Stock" as const, price: "$45.00", description: "" },
-  { id: 8, product: { name: "Portable SSD", category: "Storage" }, sku: "PS-6543", stock: 33, status: "In Stock" as const, price: "$179.00", description: "" },
-];
+interface ApiProductSize {
+  stock_quantity?: number;
+}
+
+interface ApiCategory {
+  id: string;
+  name?: string;
+}
+
+interface ApiProductMedia {
+  id: string;
+  media_url?: string;
+  alt_text?: string | null;
+  is_primary?: boolean;
+}
+
+interface ApiProductDetails {
+  id: string;
+  name?: string;
+  sku?: string;
+  status?: string;
+  price?: string | number;
+  description?: string;
+  categories?: ApiCategory[];
+  media?: ApiProductMedia[];
+  sizes?: ApiProductSize[];
+}
+
+interface ProductDetailsResponse {
+  success?: boolean;
+  message?: string;
+  data?: ApiProductDetails;
+}
 
 export default function ViewProductPage() {
   const params = useParams();
   const router = useRouter();
-  const id = Number(params.id);
+  const id = Array.isArray(params?.id) ? params.id[0] : params?.id;
 
-  const [product, setProduct] = useState<(typeof allProducts)[0] | null | undefined>(undefined);
+  const [product, setProduct] = useState<ApiProductDetails | null | undefined>(undefined);
+  const [pageError, setPageError] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
   const [deleteModal, setDeleteModal] = useState(false);
 
   useEffect(() => {
-    const found = allProducts.find((p) => p.id === id);
-    setProduct(found ?? null);
+    const fetchProduct = async () => {
+      if (!id) {
+        setProduct(null);
+        return;
+      }
+
+      try {
+        setPageError("");
+        const res = await productApi.getAdminProductById<ProductDetailsResponse>(id);
+        setProduct(res?.data || null);
+      } catch (error) {
+        console.error("Failed to fetch product:", error);
+        setPageError("Failed to load product details.");
+        setProduct(null);
+      }
+    };
+
+    fetchProduct();
   }, [id]);
 
-  const handleDelete = () => {
-    // In real app: call delete API
-    router.push("/admin/products");
+  const handleDelete = async () => {
+    if (!id || isDeleting) return;
+
+    try {
+      setIsDeleting(true);
+      setPageError("");
+      await productApi.deleteProduct(id);
+      router.push("/admin/products");
+    } catch (error) {
+      console.error("Delete product failed:", error);
+      setPageError("Failed to delete product. Please try again.");
+      setDeleteModal(false);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   if (product === undefined) {
@@ -68,33 +122,44 @@ export default function ViewProductPage() {
     );
   }
 
-  const stockColor =
-    product.status === "In Stock"
-      ? "success"
-      : product.status === "Low Stock"
-      ? "warning"
-      : "error";
+  const stock = (product.sizes || []).reduce((sum, size) => sum + (size.stock_quantity || 0), 0);
+  const status = product.status === "INACTIVE" ? "INACTIVE" : "ACTIVE";
+  const price = Number(product.price ?? 0);
+  const safePrice = Number.isFinite(price) ? price : 0;
+  const stockColor = status === "ACTIVE" ? "success" : "error";
+  const categoryText = product.categories?.length
+    ? product.categories
+        .map((category) => category.name)
+        .filter(Boolean)
+        .join(", ")
+    : "No category";
 
   return (
     <>
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
+        {pageError && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
+            {pageError}
+          </div>
+        )}
+
         {/* Breadcrumb */}
         <nav className="mb-6 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
           <Link href="/admin/products" className="hover:text-gray-700 dark:hover:text-gray-200 transition-colors">Products</Link>
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
           </svg>
-          <span className="text-gray-800 dark:text-white/90 font-medium">{product.product.name}</span>
+          <span className="text-gray-800 dark:text-white/90 font-medium">{product.name || "Untitled product"}</span>
         </nav>
 
         {/* Page Header */}
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{product.product.name}</h1>
-              <Badge size="sm" color={stockColor}>{product.status}</Badge>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{product.name || "Untitled product"}</h1>
+              <Badge size="sm" color={stockColor}>{status}</Badge>
             </div>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{product.product.category} · SKU: {product.sku}</p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{categoryText} · SKU: {product.sku || "-"}</p>
           </div>
 
           {/* Action Buttons */}
@@ -110,6 +175,7 @@ export default function ViewProductPage() {
             </Link>
             <button
               onClick={() => setDeleteModal(true)}
+              disabled={isDeleting}
               className="inline-flex items-center gap-2 rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -129,15 +195,15 @@ export default function ViewProductPage() {
             <dl className="divide-y divide-gray-100 dark:divide-white/[0.05]">
               <div className="flex items-center px-6 py-4">
                 <dt className="w-40 shrink-0 text-sm text-gray-500 dark:text-gray-400">Product Name</dt>
-                <dd className="text-sm font-medium text-gray-800 dark:text-white/90">{product.product.name}</dd>
+                <dd className="text-sm font-medium text-gray-800 dark:text-white/90">{product.name || "Untitled product"}</dd>
               </div>
               <div className="flex items-center px-6 py-4">
                 <dt className="w-40 shrink-0 text-sm text-gray-500 dark:text-gray-400">Category</dt>
-                <dd className="text-sm font-medium text-gray-800 dark:text-white/90">{product.product.category}</dd>
+                <dd className="text-sm font-medium text-gray-800 dark:text-white/90">{categoryText}</dd>
               </div>
               <div className="flex items-center px-6 py-4">
                 <dt className="w-40 shrink-0 text-sm text-gray-500 dark:text-gray-400">SKU</dt>
-                <dd className="font-mono text-sm text-gray-800 dark:text-white/90">{product.sku}</dd>
+                <dd className="font-mono text-sm text-gray-800 dark:text-white/90">{product.sku || "-"}</dd>
               </div>
               {product.description && (
                 <div className="flex items-start px-6 py-4">
@@ -158,29 +224,67 @@ export default function ViewProductPage() {
               {/* Stock */}
               <div className="px-6 py-6 text-center">
                 <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500">Stock</p>
-                <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">{product.stock}</p>
+                <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">{stock}</p>
                 <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">units available</p>
               </div>
 
               {/* Price */}
               <div className="px-6 py-6 text-center">
                 <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500">Price</p>
-                <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">{product.price}</p>
+                <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">${safePrice.toFixed(2)}</p>
                 <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">per unit</p>
               </div>
 
               {/* Status */}
               <div className="px-6 py-6 flex flex-col items-center justify-center gap-2">
                 <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500">Status</p>
-                <Badge size="sm" color={stockColor}>{product.status}</Badge>
-                {product.status === "Low Stock" && (
-                  <p className="text-xs text-amber-500 dark:text-amber-400">Consider restocking soon</p>
-                )}
-                {product.status === "Out of Stock" && (
-                  <p className="text-xs text-red-500 dark:text-red-400">Restock required</p>
-                )}
+                <Badge size="sm" color={stockColor}>{status}</Badge>
               </div>
             </div>
+          </div>
+
+          {/* Media Card */}
+          <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] overflow-hidden">
+            <div className="border-b border-gray-100 dark:border-white/[0.05] px-6 py-4">
+              <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">Media</h2>
+            </div>
+
+            {product.media && product.media.length > 0 ? (
+              <div className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-2">
+                {product.media.map((mediaItem) => (
+                  <div
+                    key={mediaItem.id}
+                    className="overflow-hidden rounded-lg border border-gray-200 bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.02]"
+                  >
+                    {mediaItem.media_url ? (
+                      <img
+                        src={mediaItem.media_url}
+                        alt={mediaItem.alt_text || product.name || "Product image"}
+                        className="h-48 w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-48 items-center justify-center text-sm text-gray-500 dark:text-gray-400">
+                        Image URL missing
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                        {mediaItem.alt_text || "No alt text"}
+                      </p>
+                      {mediaItem.is_primary && (
+                        <Badge size="sm" color="primary">
+                          Primary
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="px-6 py-10 text-center">
+                <p className="text-sm text-gray-500 dark:text-gray-400">No media images found for this product.</p>
+              </div>
+            )}
           </div>
 
           {/* Back Link */}
@@ -203,11 +307,13 @@ export default function ViewProductPage() {
       {/* Delete Confirmation Modal */}
       <ConfirmationModal
         isOpen={deleteModal}
-        onClose={() => setDeleteModal(false)}
+        onClose={() => {
+          if (!isDeleting) setDeleteModal(false);
+        }}
         onConfirm={handleDelete}
         title="Delete Product"
-        message={`Are you sure you want to delete "${product.product.name}"? This action is permanent and cannot be undone.`}
-        confirmLabel="Delete"
+        message={`Are you sure you want to delete "${product.name || "Untitled product"}"? This action is permanent and cannot be undone.`}
+        confirmLabel={isDeleting ? "Deleting..." : "Delete"}
         cancelLabel="Cancel"
         variant="danger"
       />

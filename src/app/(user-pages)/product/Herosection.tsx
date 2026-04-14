@@ -9,7 +9,7 @@ const HeroSection = () => {
   const router = useRouter();
 
   const handleCustomize = () => {
-    router.push("/customize-baskit");
+    router.push("/get-a-qoute");
   }
   return (
     <section className="relative isolate w-full overflow-hidden bg-cover bg-center bg-no-repeat bg-[url('/images/shopHero.png')] p-10">

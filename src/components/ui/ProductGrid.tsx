@@ -44,18 +44,18 @@ const ProductCard = ({ product }: { product: Product }) => {
           className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.03]"
         /> */}
         <Link
-  href={`/product/${product.id}`}
-  className="block h-full w-full"
-  aria-label={`View ${product.name}`}
->
-  <Image
-    src={product.image}
-    width={413}
-    height={420}
-    alt={product.name}
-    className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.03]"
-  />
-</Link>
+          href={`/product/${product.id}`}
+          className="block h-full w-full"
+          aria-label={`View ${product.name}`}
+        >
+          <Image
+            src={product.image}
+            width={413}
+            height={420}
+            alt={product.name}
+            className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.03]"
+          />
+        </Link>
       </div>
 
       <div className="space-y-1.5">
