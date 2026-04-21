@@ -4,6 +4,7 @@ import "flatpickr/dist/flatpickr.css";
 import { SidebarProvider } from '@/context/SidebarContext';
 import { Metadata } from 'next';
 import AuthGuard from '@/components/AuthGuard';
+import { ClientProvider } from './ClientProvider';
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -23,9 +24,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={manrope.className}>
-        {/* <AuthGuard> */}
-          <SidebarProvider>{children}</SidebarProvider>
-        {/* </AuthGuard> */}
+        <ClientProvider>
+          <AuthGuard>
+            <SidebarProvider>{children}</SidebarProvider>
+          </AuthGuard>
+        </ClientProvider>
       </body>
     </html>
   );

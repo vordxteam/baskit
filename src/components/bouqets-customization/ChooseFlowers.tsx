@@ -4,36 +4,36 @@ import { useState } from 'react'
 
 
 type Item = {
-  id: number
+  id: string
   name: string
-  price: string
+  price?: string | number
   category: string
-  image: string
+  image_url?: string | null
 }
 
-const allItems: Item[] = [
-  { id: 1,  name: 'Red Rose',       price: 'PKR 120', category: 'Chocolates',        image: '/images/red-rose.png'     },
-  { id: 2,  name: 'Sun Flower',       price: 'PKR 120', category: 'Chocolates',        image: '/images/sun-flower.png'   },
-  { id: 3,  name: 'White Rose',     price: 'PKR 120', category: 'Chocolates',        image: '/images/white-rose.png' },
-  { id: 4,  name: 'Yellow Rose',          price: 'PKR 120', category: 'Chocolates',        image: '/images/yellow-rose.png'      },
-  { id: 5,  name: 'Pink Rose',      price: 'PKR 120', category: 'Chocolates',        image: '/images/pink-rose.png' },
-  { id: 6,  name: 'Daisy ',           price: 'PKR 120', category: 'Chocolates',        image: '/images/daisy.png'      },
-  { id: 7,  name: 'Daffodil', price: 'PKR 120', category: 'Chocolates',        image: '/images/daffodil.png'   },
-  { id: 8,  name: 'Jasmine',           price: 'PKR 120', category: 'Chocolates',        image: '/images/jasmine.png'      },
- 
-]
-        
-type SelectedItem = { id: number; qty: number }
+type SelectedItem = { id: string; qty: number }
 
 type Props = {
+  items: Item[]
   selected: SelectedItem[]
   onSelectionChange: (items: SelectedItem[]) => void
   onBack: () => void
   onContinue: () => void
+  isLoading?: boolean
+  message?: string
+  minItems?: number
+  maxItems?: number
 }
 
-export default function ChooseFlowers({ selected, onSelectionChange, onBack, onContinue }: Props) {
+export default function ChooseFlowers({ items, selected, onSelectionChange, onBack, onContinue, isLoading = false, message = '', minItems, maxItems }: Props) {
   const [activeFilters, setActiveFilters] = useState<string[]>([])
+  const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({})
+
+  const totalSelectedQty = selected.reduce((sum, item) => sum + item.qty, 0)
+  const hasMinItems = typeof minItems === 'number'
+  const hasMaxItems = typeof maxItems === 'number'
+  const isBelowMin = hasMinItems ? totalSelectedQty < (minItems || 0) : false
+  const isAboveMax = hasMaxItems ? totalSelectedQty > (maxItems || Number.MAX_SAFE_INTEGER) : false
 
   const toggleFilter = (f: string) => {
     setActiveFilters((prev) =>
@@ -42,22 +42,35 @@ export default function ChooseFlowers({ selected, onSelectionChange, onBack, onC
   }
 
   const visibleItems = activeFilters.length > 0
-    ? allItems.filter((item) => activeFilters.includes(item.category))
-    : allItems
+    ? items.filter((item) => activeFilters.includes(item.category))
+    : items
 
-  const isSelected = (id: number) => selected.some((s) => s.id === id)
+  const isSelected = (id: string) => selected.some((s) => s.id === id)
 
-  const getQty = (id: number) => selected.find((s) => s.id === id)?.qty ?? 1
+  const getQty = (id: string) => selected.find((s) => s.id === id)?.qty ?? 1
 
-  const toggleItem = (id: number) => {
+  const toggleItem = (id: string) => {
     if (isSelected(id)) {
       onSelectionChange(selected.filter((s) => s.id !== id))
     } else {
+      if (hasMaxItems && totalSelectedQty >= (maxItems || Number.MAX_SAFE_INTEGER)) {
+        return
+      }
       onSelectionChange([...selected, { id, qty: 1 }])
     }
   }
 
-  const changeQty = (id: number, delta: number) => {
+  const changeQty = (id: string, delta: number) => {
+    const currentQty = getQty(id)
+
+    if (delta > 0 && hasMaxItems && totalSelectedQty >= (maxItems || Number.MAX_SAFE_INTEGER)) {
+      return
+    }
+
+    if (delta < 0 && currentQty <= 1) {
+      return
+    }
+
     onSelectionChange(
       selected.map((s) =>
         s.id === id ? { ...s, qty: Math.max(1, s.qty + delta) } : s
@@ -68,12 +81,43 @@ export default function ChooseFlowers({ selected, onSelectionChange, onBack, onC
   return (
     <section id="choose-flowers" className="scroll-mt-24">
       <h2 className="text-[28px] sm:text-[32px] tobia-normal text-[#252525] mb-6">
-       Choose your flowers
+        Choose your flowers
       </h2>
+
+      {isLoading && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-4">
+          {[1, 2, 3, 4].map((skeleton) => (
+            <div key={skeleton} className="animate-pulse">
+              <div className="h-[260px] bg-[#EEE9DE]" />
+              <div className="mt-2 h-5 bg-[#EEE9DE]" />
+              <div className="mt-2 h-5 w-2/3 bg-[#EEE9DE]" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!isLoading && items.length === 0 && (
+        <div className="mb-4 rounded-md border border-dashed border-[#25252533] p-4 text-sm text-[#8E8A83]">
+          {message || 'No flowers available.'}
+        </div>
+      )}
+
+      {!isLoading && items.length > 0 && (hasMinItems || hasMaxItems) && (
+        <div className={`mb-4 rounded-md border p-3 text-sm ${isBelowMin || isAboveMax ? 'border-red-300 bg-red-50 text-red-700' : 'border-[#25252533] text-[#8E8A83]'}`}>
+          {hasMinItems && hasMaxItems
+            ? `Select between ${minItems} and ${maxItems} items. Current: ${totalSelectedQty}`
+            : hasMinItems
+              ? `Select at least ${minItems} items. Current: ${totalSelectedQty}`
+              : `Select up to ${maxItems} items. Current: ${totalSelectedQty}`}
+        </div>
+      )}
+
       {/* Items Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
         {visibleItems.map((item) => {
           const sel = isSelected(item.id)
+          const imageUnavailable = !item.image_url || brokenImages[item.id]
+
           return (
             <div key={item.id} className="flex flex-col">
 
@@ -99,20 +143,27 @@ export default function ChooseFlowers({ selected, onSelectionChange, onBack, onC
                 <img src={item.image} alt="product images" />
                 </div> */}
                 {/* Product image placeholder */}
-<div className="w-full h-full flex items-center justify-center">
-  <img 
-    src={item.image} 
-    alt="product images"
-    className="w-full h-full object-contain"
-  />
-</div>
+                <div className="w-full h-full flex items-center justify-center">
+                  {imageUnavailable ? (
+                    <div className="flex h-full w-full items-center justify-center rounded-md border border-dashed border-[#25252533] text-xs text-[#8E8A83]">
+                      Image preview not available
+                    </div>
+                  ) : (
+                    <img
+                      src={item.image_url ?? undefined}
+                      alt={item.name}
+                      className="w-full h-full object-contain"
+                      onError={() => setBrokenImages((prev) => ({ ...prev, [item.id]: true }))}
+                    />
+                  )}
+                </div>
               </div>
 
               {/* Name, price, qty */}
               <div className="mt-2 flex items-center justify-between gap-2">
                 <div>
                   <p className="text-[20px] text-[#252525]  leading-6 tobia-normal">{item.name}</p>
-                  <p className="text-[20px] text-[#252525] leading-6 mt-2 tobia-normal">{item.price}</p>
+                  <p className="text-[20px] text-[#252525] leading-6 mt-2 tobia-normal">{item.price ?? ''}</p>
                 </div>
 
                 {/* Qty buttons */}
@@ -128,6 +179,7 @@ export default function ChooseFlowers({ selected, onSelectionChange, onBack, onC
                   </span>
                   <button
                     onClick={() => sel && changeQty(item.id, 1)}
+                    disabled={hasMaxItems && totalSelectedQty >= (maxItems || Number.MAX_SAFE_INTEGER) && sel}
                     className="w-4 h-full flex items-center justify-center text-[#252525] hover:bg-[#f5f0e8] transition-colors text-[14px]"
                   >
                     +
@@ -139,7 +191,7 @@ export default function ChooseFlowers({ selected, onSelectionChange, onBack, onC
         })}
       </div>
 
-  
+
     </section>
   )
 }

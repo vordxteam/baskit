@@ -69,6 +69,23 @@ export class ProfileApi {
   ): Promise<TResponse> {
     return apiClient.put<TResponse>("/api/profile/change-password", payload);
   }
+
+  /**
+   * Upload profile avatar image
+   * POST /api/profile/avatar
+   */
+  async uploadProfileAvatar<TResponse = UploadProfileImageResponse>(
+    file: File
+  ): Promise<TResponse> {
+    const formData = new FormData();
+    formData.append("avatar", file);
+
+    return apiClient.post<TResponse>("/api/profile/avatar", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+  }
 }
 
 export const profileApi = new ProfileApi();

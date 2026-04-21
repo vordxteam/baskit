@@ -1,8 +1,13 @@
+'use client'
+
 import Button from '@/components/ui/button/Button'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import React from 'react'
 
 const HowToCreate = () => {
+
+    const router = useRouter()
     return (
         <div className='pb-10 lg:py-20 max-w-[1440px] mx-auto'>
             <div className='grid grid-cols-1 lg:grid-cols-2'>
@@ -46,8 +51,8 @@ const HowToCreate = () => {
                     </div>
 
                     <div>
-                        <Button variant='primary' className='w-full'>
-                            Get a quote
+                        <Button onClick={() => router.push('/get-a-qoute')} variant='primary' className='w-full'>
+                            Create your Baskit
                         </Button>
                     </div>
                 </div>

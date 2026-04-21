@@ -1,33 +1,78 @@
-
-
-import { apiClient } from '../core/apiClient';
+import { apiClient } from "../core/apiClient";
 import {
-	ApiMessageResponse,
-	CreateCatalogItemPayload,
-	CreateCategoryPayload,
-	CreateProductComponentPayload,
-	CreateProductFullPayload,
-	CreateProductMediaPayload,
-	CreateProductPayload,
-	CreateProductSizePayload,
-	CreateProductTypePayload,
-	GetProductsQuery,
-	UpdateCatalogItemPayload,
-	UpdateProductComponentPayload,
-	UpdateProductFullPayload,
-	UpdateProductSizePayload,
-	UpdateProductStatusPayload,
-	UpdateProductTypePayload,
-} from './types';
+  ApiMessageResponse,
+  CreateCategoryPayload,
+  CreateConfiguredProductPayload,
+  CreateProductFullPayload,
+  CreateProductPayload,
+  CreateProductTypePayload,
+  GetProductsQuery,
+  UpdateProductFullPayload,
+  UpdateProductStatusPayload,
+  UpdateProductTypePayload,
+} from "./types";
+
+type CacheEntry<T> = {
+  data: T;
+  timestamp: number;
+};
 
 export class ProductApi {
-	private adminBaseEndpoint = '/api/admin';
-	private userBaseEndpoint = '/api';
+  private adminBaseEndpoint = "/api/admin";
+  private userBaseEndpoint = "/api";
 
-    // Admin: Products
-	async getAdminProducts<TResponse = unknown>(): Promise<TResponse> {
-		return apiClient.get<TResponse>(`${this.adminBaseEndpoint}/products`);
-	}
+  // cache paginated admin products by query key
+  private adminProductsCache = new Map<string, CacheEntry<unknown>>();
+
+  // optional cache expiry: 5 minutes
+  private readonly ADMIN_PRODUCTS_CACHE_TTL = 5 * 60 * 1000;
+
+  private buildProductsCacheKey(params?: GetProductsQuery): string {
+    if (!params) return "admin-products::default";
+
+    const normalizedEntries = Object.entries(params)
+      .filter(([, value]) => value !== undefined && value !== null && value !== "")
+      .sort(([a], [b]) => a.localeCompare(b));
+
+    return `admin-products::${JSON.stringify(normalizedEntries)}`;
+  }
+
+  private isCacheValid(entry: CacheEntry<unknown>): boolean {
+    return Date.now() - entry.timestamp < this.ADMIN_PRODUCTS_CACHE_TTL;
+  }
+
+  clearAdminProductsCache(): void {
+    this.adminProductsCache.clear();
+  }
+
+  clearAdminProductsCacheByPage(params?: GetProductsQuery): void {
+    const key = this.buildProductsCacheKey(params);
+    this.adminProductsCache.delete(key);
+  }
+
+  async getAdminProducts<TResponse = unknown>(
+    params?: GetProductsQuery,
+    options?: { forceRefresh?: boolean }
+  ): Promise<TResponse> {
+    const cacheKey = this.buildProductsCacheKey(params);
+    const cached = this.adminProductsCache.get(cacheKey);
+
+    if (!options?.forceRefresh && cached && this.isCacheValid(cached)) {
+      return cached.data as TResponse;
+    }
+
+    const response = await apiClient.get<TResponse>(
+      `${this.adminBaseEndpoint}/products`,
+      params as Record<string, any>
+    );
+
+    this.adminProductsCache.set(cacheKey, {
+      data: response,
+      timestamp: Date.now(),
+    });
+
+    return response;
+  }
 
 	async getAdminProductById<TResponse = unknown>(id: string): Promise<TResponse> {
 		return apiClient.get<TResponse>(`${this.adminBaseEndpoint}/products/${id}`);
@@ -143,15 +188,15 @@ export class ProductApi {
 		return apiClient.put<TResponse>(`${this.adminBaseEndpoint}/products/${productId}`, payload);
 	}
 
-	async createProductFull<TResponse = unknown>(payload: CreateProductFullPayload): Promise<TResponse> {
-		return apiClient.post<TResponse>(`${this.adminBaseEndpoint}/products/full`, payload);
+	async createProductFull<TResponse = unknown>(payload: CreateConfiguredProductPayload): Promise<TResponse> {
+		return apiClient.post<TResponse>(`${this.adminBaseEndpoint}/products/simple`, payload);
 	}
 
 	async updateProductFull<TResponse = unknown>(
 		id: string,
-		payload: UpdateProductFullPayload
+		payload: CreateConfiguredProductPayload
 	): Promise<TResponse> {
-		return apiClient.put<TResponse>(`${this.adminBaseEndpoint}/products/full/${id}`, payload);
+		return apiClient.put<TResponse>(`${this.adminBaseEndpoint}/products/simple/${id}`, payload);
 	}
 
     // Category Api's
@@ -190,6 +235,10 @@ export class ProductApi {
 		return apiClient.get<TResponse>(`${this.adminBaseEndpoint}/product-types`, params as Record<string, any>);
 	}
 
+	async getProductStyles<TResponse = unknown>(id: string): Promise<TResponse> {
+		return apiClient.get<TResponse>(`${this.adminBaseEndpoint}/product-types/${id}/styles`);
+	}
+
 	async getProductTypeById<TResponse = unknown>(id: string): Promise<TResponse> {
 		return apiClient.get<TResponse>(`${this.adminBaseEndpoint}/product-types/${id}`);
 	}
@@ -210,107 +259,6 @@ export class ProductApi {
 	async deleteProductType<TResponse = ApiMessageResponse>(id: string): Promise<TResponse> {
 		return apiClient.delete<TResponse>(`${this.adminBaseEndpoint}/product-types/${id}`);
 	}
-
-	// Admin: Product Sizes
-	async createProductSize<TResponse = unknown>(
-		payload: CreateProductSizePayload
-	): Promise<TResponse> {
-		return apiClient.post<TResponse>(`${this.adminBaseEndpoint}/product-sizes`, payload);
-	}
-
-	async updateProductSize<TResponse = unknown>(
-		id: string,
-		payload: UpdateProductSizePayload
-	): Promise<TResponse> {
-		return apiClient.put<TResponse>(`${this.adminBaseEndpoint}/product-sizes/${id}`, payload);
-	}
-
-	async deleteProductSize<TResponse = ApiMessageResponse>(id: string): Promise<TResponse> {
-		return apiClient.delete<TResponse>(`${this.adminBaseEndpoint}/product-sizes/${id}`);
-	}
-
-	// Admin: Catalog Items
-	async createCatalogItem<TResponse = unknown>(
-		payload: CreateCatalogItemPayload
-	): Promise<TResponse> {
-		return apiClient.post<TResponse>(`${this.adminBaseEndpoint}/catalog-items`, payload);
-	}
-
-	async getCatalogItems<TResponse = unknown>(): Promise<TResponse> {
-		return apiClient.get<TResponse>(`${this.adminBaseEndpoint}/catalog-items`);
-	}
-
-	async getCatalogItemById<TResponse = unknown>(id: string): Promise<TResponse> {
-		return apiClient.get<TResponse>(`${this.adminBaseEndpoint}/catalog-items/${id}`);
-	}
-
-	async updateCatalogItem<TResponse = unknown>(
-		id: string,
-		payload: UpdateCatalogItemPayload
-	): Promise<TResponse> {
-		return apiClient.put<TResponse>(`${this.adminBaseEndpoint}/catalog-items/${id}`, payload);
-	}
-
-	async deleteCatalogItem<TResponse = ApiMessageResponse>(id: string): Promise<TResponse> {
-		return apiClient.delete<TResponse>(`${this.adminBaseEndpoint}/catalog-items/${id}`);
-	}
-
-	// Admin: Product Components
-	async createProductComponent<TResponse = unknown>(
-		productId: string,
-		payload: CreateProductComponentPayload
-	): Promise<TResponse> {
-		return apiClient.post<TResponse>(`${this.adminBaseEndpoint}/products/${productId}/components`, payload);
-	}
-
-	async updateProductComponent<TResponse = unknown>(
-		productId: string,
-		componentId: string,
-		payload: UpdateProductComponentPayload
-	): Promise<TResponse> {
-		return apiClient.put<TResponse>(
-			`${this.adminBaseEndpoint}/products/${productId}/components/${componentId}`,
-			payload
-		);
-	}
-
-	async deleteProductComponent<TResponse = ApiMessageResponse>(
-		productId: string,
-		componentId: string
-	): Promise<TResponse> {
-		return apiClient.delete<TResponse>(
-			`${this.adminBaseEndpoint}/products/${productId}/components/${componentId}`
-		);
-	}
-
-	// Admin: Product Media
-	async createProductMedia<TResponse = unknown>(
-		productId: string,
-		payload: CreateProductMediaPayload
-	): Promise<TResponse> {
-		const formData = new FormData();
-		formData.append('file', payload.file);
-
-		const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
-		const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-
-		const response = await fetch(`${baseUrl}${this.adminBaseEndpoint}/products/${productId}/media`, {
-			method: 'POST',
-			headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-			credentials: 'include',
-			body: formData,
-		});
-
-		const text = await response.text();
-		const data = text ? JSON.parse(text) : null;
-
-		if (!response.ok) {
-			throw new Error(data?.message || 'Failed to create product media');
-		}
-
-		return data as TResponse;
-	}
-
 	
 }
 

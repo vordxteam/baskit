@@ -1,24 +1,15 @@
 'use client'
 
-import { Filter, X } from 'lucide-react'
-
-const filters = [
-  'Chocolates',
-  'Chips',
-  'Biscuit & cookies',
-  'Dried fruit & nuts',
-  'Beverages',
-  'Nimco & crackers',
-  'Cakes & wafers',
-]
+import { X } from 'lucide-react'
 
 type Props = {
+  filters: string[]
   active: string[]
   onToggle: (filter: string) => void
   onClear: () => void
 }
 
-export default function ItemFilters({ active, onToggle, onClear }: Props) {
+export default function ItemFilters({ filters, active, onToggle, onClear }: Props) {
   return (
     <div className="flex flex-wrap items-center gap-2 mb-6">
 

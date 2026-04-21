@@ -42,12 +42,37 @@ const navItems: NavItem[] = [
   },
   {
     icon: <GridIcon />,
-    name: "Product Categories",
+    name: "Product Types",
     path: "/admin/product-category",
   },
   {
+    icon: <BringToFront />,
+    name: "Product Subtypes",
+    path: "/admin/product-subtype",
+  },
+  {
+    icon: <GridIcon />,
+    name: "Product Styles",
+    path: "/admin/product-style",
+  },
+  {
+    icon: <GridIcon />,
+    name: "Product Sizes",
+    path: "/admin/product-sizes",
+  },
+  {
+    icon: <BringToFront />,
+    name: "Baskit Containers",
+    path: "/admin/baskit-container",
+  },
+  {
+    icon: <GridIcon />,
+    name: "Inventory Item Types",
+    path: "/admin/catalog-types",
+  },
+  {
     icon: <BoxCubeIcon />,
-    name: "Inventory",
+    name: "Inventory Items",
     path: "/admin/inventory",
   },
   {
@@ -55,6 +80,8 @@ const navItems: NavItem[] = [
     name: "Orders",
     path: "/admin/orders",
   },
+
+
 ];
 
 const AppSidebar: React.FC = () => {
@@ -71,10 +98,9 @@ const AppSidebar: React.FC = () => {
   return (
     <aside
       className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200
-        ${
-          isExpanded || isMobileOpen
-            ? "w-[290px]"
-            : isHovered
+        ${isExpanded || isMobileOpen
+          ? "w-[290px]"
+          : isHovered
             ? "w-[290px]"
             : "w-[90px]"
         }
@@ -84,18 +110,17 @@ const AppSidebar: React.FC = () => {
       onMouseLeave={() => setIsHovered(false)}
     >
       <div
-        className={`pt-4 pb-8 flex ${
-          !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
-        }`}
+        className={`pt-4 pb-8 flex ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
+          }`}
       >
         <Link href="/">
           {showSidebarLabels ? (
             <>
-             <h1 className="text-[#4E0A0B] text-[50px] italic dark:hidden">Baskit</h1>
-            <h1 className="text-[#b18283] text-[50px] italic hidden dark:block">Baskit</h1>
+              <h1 className="text-[#4E0A0B] text-[50px] italic dark:hidden">Baskit</h1>
+              <h1 className="text-[#b18283] text-[50px] italic hidden dark:block">Baskit</h1>
             </>
           ) : (
-             <h1 className="text-black dark:text-white text-[50px] italic">B</h1>
+            <h1 className="text-black dark:text-white text-[50px] italic">B</h1>
           )}
         </Link>
       </div>
@@ -107,16 +132,14 @@ const AppSidebar: React.FC = () => {
               <li key={nav.name}>
                 <Link
                   href={nav.path}
-                  className={`menu-item group ${
-                    isActive(nav.path) ? "menu-item-active" : "menu-item-inactive"
-                  }`}
+                  className={`menu-item group ${isActive(nav.path) ? "menu-item-active" : "menu-item-inactive"
+                    }`}
                 >
                   <span
-                    className={`${
-                      isActive(nav.path)
+                    className={`${isActive(nav.path)
                         ? "menu-item-icon-active"
                         : "menu-item-icon-inactive"
-                    }`}
+                      }`}
                   >
                     {nav.icon}
                   </span>
@@ -130,12 +153,12 @@ const AppSidebar: React.FC = () => {
           </ul>
         </nav>
 
-          <div className="mt-auto pb-6">
-            {showSidebarLabels && (
-                <div className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500">
-                  Reports & Updates
-                </div>
-            )}
+        <div className="mt-auto pb-6">
+          {showSidebarLabels && (
+            <div className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500">
+              Reports & Updates
+            </div>
+          )}
 
           <nav>
             <ul className="flex flex-col gap-4">
@@ -163,7 +186,7 @@ const AppSidebar: React.FC = () => {
               </li>
             </ul>
           </nav>
-          </div>
+        </div>
       </div>
     </aside>
   );

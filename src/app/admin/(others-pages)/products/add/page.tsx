@@ -1,210 +1,585 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { productApi, type CreateProductPayload } from "@/api";
+import { productApi, type CreateConfiguredProductPayload } from "@/api";
+import { ProductSize } from "@/api/productSize";
+import { ProductInventory } from "@/api/productInventory";
+import type { InventoryItem, InventoryListResponse } from "@/api/productInventory/types";
+import { MediaSection } from "./components/MediaSection";
+import { ProductBasicsSection } from "./components/ProductBasicsSection";
+import { SizesSection } from "./components/SizesSection";
+import { StylesAndOccasionsSection } from "./components/StylesAndOccasionsSection";
+import {
+  createEmptySizeForm,
+  initialForm,
+  type CategoryOption,
+  type FormErrors,
+  type ProductForm,
+  type ProductStyleOption,
+  type ProductTypeOption,
+  type SizeErrors,
+  type SizeForm,
+  type SizeItemForm,
+  type SizeTemplateOption,
+} from "./components/types";
 
-const tierOptions = ["BASIC", "STANDARD", "PREMIUM"] as const;
-const statusOptions = ["ACTIVE", "INACTIVE"] as const;
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === "object" && value !== null;
+};
 
-interface ProductTypeOption {
-  id: string;
-  name: string;
-}
+const normalizeArray = <T,>(value: unknown): T[] => {
+  if (Array.isArray(value)) {
+    return value as T[];
+  }
 
-interface CategoryOption {
-  id: string;
-  name: string;
-}
+  if (isRecord(value)) {
+    const data = value.data;
 
-interface ProductTypeApiResponse {
-  data?: ProductTypeOption[];
-}
+    if (Array.isArray(data)) {
+      return data as T[];
+    }
 
-interface CategoryApiResponse {
-  data?: CategoryOption[];
-}
+    if (isRecord(data) && Array.isArray(data.data)) {
+      return data.data as T[];
+    }
+  }
 
-interface ProductFormState {
-  product_type_id: string;
-  category_id: string;
-  name: string;
-  short_description: string;
-  description: string;
-  tier: (typeof tierOptions)[number];
-  price: string;
-  compare_at_price: string;
-  status: (typeof statusOptions)[number];
-  items: Array<{ name: string; quantity: string }>;
-  images: File[];
-}
+  return [];
+};
 
-const initialForm: ProductFormState = {
-  product_type_id: "",
-  category_id: "",
-  name: "",
-  short_description: "",
-  description: "",
-  tier: "BASIC",
-  price: "",
-  compare_at_price: "",
-  status: "ACTIVE",
-  items: [{ name: "", quantity: "" }],
-  images: [],
+const normalizeSizeTemplates = (value: unknown): SizeTemplateOption[] => {
+  if (isRecord(value) && isRecord(value.data) && Array.isArray(value.data.sizes)) {
+    return value.data.sizes as SizeTemplateOption[];
+  }
+
+  return [];
+};
+
+const normalizeInventoryItems = (value: unknown): InventoryItem[] => {
+  if (isRecord(value) && isRecord(value.data) && Array.isArray(value.data.data)) {
+    return value.data.data as InventoryItem[];
+  }
+
+  if (isRecord(value) && Array.isArray(value.data)) {
+    return value.data as InventoryItem[];
+  }
+
+  return [];
+};
+
+const fileToDataUrl = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("Unable to read file"));
+    reader.readAsDataURL(file);
+  });
 };
 
 export default function AddProductPage() {
   const router = useRouter();
-  const isSubmittingRef = useRef(false);
-  const [form, setForm] = useState<ProductFormState>(initialForm);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const submitGuardRef = useRef(false);
+
+  const [form, setForm] = useState<ProductForm>(initialForm);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [sizeErrors, setSizeErrors] = useState<SizeErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
+  const [isLoadingStyles, setIsLoadingStyles] = useState(false);
   const [apiError, setApiError] = useState("");
+
   const [productTypes, setProductTypes] = useState<ProductTypeOption[]>([]);
+  const [productStyles, setProductStyles] = useState<ProductStyleOption[]>([]);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [sizeTemplates, setSizeTemplates] = useState<SizeTemplateOption[]>([]);
+  const [catalogItems, setCatalogItems] = useState<InventoryItem[]>([]);
+  const [selectedSizeTemplateId, setSelectedSizeTemplateId] = useState("");
+
+  const availableSizeTemplates = useMemo(() => {
+    const activeTemplates = sizeTemplates.filter((template) => template.is_active !== false);
+    if (!form.product_type_id) {
+      return activeTemplates;
+    }
+
+    return activeTemplates.filter((template) => template.product_type_id === form.product_type_id);
+  }, [form.product_type_id, sizeTemplates]);
 
   useEffect(() => {
-    const loadOptions = async () => {
+    const loadStaticOptions = async () => {
       try {
         setIsLoadingOptions(true);
-        const [typesRes, categoryRes] = await Promise.all([
-          productApi.getProductTypes<ProductTypeApiResponse>({ is_active: true }),
-          productApi.getCategory<CategoryApiResponse>({ is_active: true }),
+        const [typesRes, categoriesRes, sizesRes, inventoryRes] = await Promise.all([
+          productApi.getProductTypes<unknown>({ is_active: true }),
+          productApi.getCategory<unknown>({ is_active: true }),
+          new ProductSize().getSizes(),
+          new ProductInventory().getInventory<InventoryListResponse>(),
         ]);
 
-        setProductTypes(typesRes.data || []);
-        setCategories(categoryRes.data || []);
+        setProductTypes(normalizeArray<ProductTypeOption>(typesRes));
+        setCategories(normalizeArray<CategoryOption>(categoriesRes));
+        setSizeTemplates(normalizeSizeTemplates(sizesRes));
+        setCatalogItems(normalizeInventoryItems(inventoryRes));
       } catch (error) {
-        console.error("Failed to load product options:", error);
-        setApiError("Failed to load categories and product types.");
+        console.error("Failed to load product creation options:", error);
+        setApiError("Failed to load product types, categories, sizes, or inventory items.");
       } finally {
         setIsLoadingOptions(false);
       }
     };
 
-    loadOptions();
+    loadStaticOptions();
   }, []);
 
-  const validate = (): Record<string, string> => {
-    const newErrors: Record<string, string> = {};
-    if (!form.product_type_id) newErrors.product_type_id = "Product type is required";
-    if (!form.category_id) newErrors.category_id = "Category is required";
-    if (!form.name.trim()) newErrors.name = "Product name is required";
-    if (!form.short_description.trim()) newErrors.short_description = "Short description is required";
-    if (!form.description.trim()) newErrors.description = "Description is required";
-    if (!form.price.trim() || Number.isNaN(Number(form.price))) newErrors.price = "Valid price is required";
-    if (!form.compare_at_price.trim() || Number.isNaN(Number(form.compare_at_price))) {
-      newErrors.compare_at_price = "Valid compare at price is required";
-    }
+  useEffect(() => {
+    const loadStyles = async () => {
+      if (!form.product_type_id) {
+        setProductStyles([]);
+        return;
+      }
 
-    const validItems = form.items.filter((item) => item.name.trim() && item.quantity.trim());
-    if (validItems.length === 0) newErrors.items = "Add at least one item with quantity";
-    if (form.images.length === 0) newErrors.images = "Upload at least one image";
+      try {
+        setIsLoadingStyles(true);
+        const response = await productApi.getProductStyles<unknown>(form.product_type_id);
+        const styles = normalizeArray<ProductStyleOption>(response);
+        setProductStyles(styles);
+        setForm((previous) => ({
+          ...previous,
+          product_style_ids: previous.product_style_ids.filter((styleId) =>
+            styles.some((style) => style.id === styleId)
+          ),
+        }));
+      } catch (error) {
+        console.error("Failed to load product styles:", error);
+        setProductStyles([]);
+        setForm((previous) => ({ ...previous, product_style_ids: [] }));
+      } finally {
+        setIsLoadingStyles(false);
+      }
+    };
 
-    return newErrors;
+    loadStyles();
+  }, [form.product_type_id]);
+
+  useEffect(() => {
+    return () => {
+      form.media.forEach((mediaItem) => URL.revokeObjectURL(mediaItem.previewUrl));
+    };
+  }, [form.media]);
+
+  const setToggleArray = (
+    field: "product_style_ids" | "category_ids",
+    value: string,
+  ) => {
+    setForm((previous) => {
+      const list = previous[field];
+      const next = list.includes(value)
+        ? list.filter((item) => item !== value)
+        : [...list, value];
+
+      return { ...previous, [field]: next };
+    });
+    clearFormError(field);
   };
 
-  const handleChange = (field: keyof ProductFormState, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-    setErrors((prev) => {
-      if (!prev[field]) return prev;
-      const next = { ...prev };
+  const updateFormField = <K extends keyof ProductForm>(field: K, value: ProductForm[K]) => {
+    setForm((previous) => ({ ...previous, [field]: value }));
+  };
+
+  const clearFormError = (field: keyof FormErrors) => {
+    setErrors((previous) => {
+      if (!previous[field]) {
+        return previous;
+      }
+
+      const next = { ...previous };
       delete next[field];
       return next;
     });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Prevent double submission
-    if (isSubmittingRef.current) return;
-    isSubmittingRef.current = true;
+  const handleProductTypeChange = (productTypeId: string) => {
+    setForm((previous) => ({
+      ...previous,
+      product_type_id: productTypeId,
+      product_style_ids: [],
+      sizes: [],
+    }));
+    setSelectedSizeTemplateId("");
+    clearFormError("product_type_id");
+    clearFormError("product_style_ids");
+    clearFormError("sizes");
+    setSizeErrors({});
+  };
 
-    setApiError("");
-    const validationErrors = validate();
-    setErrors(validationErrors);
-    if (Object.keys(validationErrors).length > 0) {
-      isSubmittingRef.current = false;
+  const handleMediaFiles = (files: File[]) => {
+    if (files.length === 0) {
       return;
     }
 
-    setIsSubmitting(true);
+    setForm((previous) => {
+      const nextMedia = [...previous.media];
+      const hasPrimary = nextMedia.some((item) => item.is_primary);
+
+      files.forEach((file, index) => {
+        nextMedia.push({
+          file,
+          previewUrl: URL.createObjectURL(file),
+          alt_text: "",
+          is_primary: !hasPrimary && nextMedia.length === index,
+        });
+      });
+
+      if (nextMedia.length > 0 && !nextMedia.some((item) => item.is_primary)) {
+        nextMedia[0] = { ...nextMedia[0], is_primary: true };
+      }
+
+      return { ...previous, media: nextMedia };
+    });
+
+    setErrors((previous) => {
+      if (!previous.media) {
+        return previous;
+      }
+
+      const next = { ...previous };
+      delete next.media;
+      return next;
+    });
+  };
+
+  const removeMedia = (index: number) => {
+    setForm((previous) => {
+      const target = previous.media[index];
+      if (target) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+
+      const nextMedia = previous.media.filter((_, currentIndex) => currentIndex !== index);
+      if (nextMedia.length > 0 && !nextMedia.some((item) => item.is_primary)) {
+        nextMedia[0] = { ...nextMedia[0], is_primary: true };
+      }
+
+      return { ...previous, media: nextMedia };
+    });
+  };
+
+  const updateMediaAltText = (index: number, value: string) => {
+    setForm((previous) => ({
+      ...previous,
+      media: previous.media.map((mediaItem, currentIndex) =>
+        currentIndex === index ? { ...mediaItem, alt_text: value } : mediaItem
+      ),
+    }));
+  };
+
+  const setPrimaryMedia = (index: number) => {
+    setForm((previous) => ({
+      ...previous,
+      media: previous.media.map((mediaItem, currentIndex) => ({
+        ...mediaItem,
+        is_primary: currentIndex === index,
+      })),
+    }));
+  };
+
+  const addSizeConfiguration = () => {
+    if (!selectedSizeTemplateId) {
+      setErrors((previous) => ({
+        ...previous,
+        sizes: "Select a size template before adding a configuration.",
+      }));
+      return;
+    }
+
+    if (form.sizes.some((size) => size.size_template_id === selectedSizeTemplateId)) {
+      setErrors((previous) => ({
+        ...previous,
+        sizes: "This size template is already added.",
+      }));
+      return;
+    }
+
+    setForm((previous) => ({
+      ...previous,
+      sizes: [...previous.sizes, createEmptySizeForm(selectedSizeTemplateId)],
+    }));
+    setSelectedSizeTemplateId("");
+    setSizeErrors({});
+    setErrors((previous) => {
+      const next = { ...previous };
+      delete next.sizes;
+      return next;
+    });
+  };
+
+  const removeSizeConfiguration = (sizeIndex: number) => {
+    setForm((previous) => ({
+      ...previous,
+      sizes: previous.sizes.filter((_, currentIndex) => currentIndex !== sizeIndex),
+    }));
+    setSizeErrors((previous) => {
+      const next = { ...previous };
+      const removedSize = form.sizes[sizeIndex];
+      if (removedSize) {
+        delete next[removedSize.size_template_id];
+      }
+      return next;
+    });
+  };
+
+  const updateSizeField = (sizeIndex: number, updater: (size: SizeForm) => SizeForm) => {
+    setForm((previous) => ({
+      ...previous,
+      sizes: previous.sizes.map((size, currentIndex) =>
+        currentIndex === sizeIndex ? updater(size) : size
+      ),
+    }));
+  };
+
+  const addSizeItemRow = (sizeIndex: number) => {
+    updateSizeField(sizeIndex, (size) => ({
+      ...size,
+      items: [...size.items, { catalog_item_id: "", quantity: "" }],
+    }));
+  };
+
+  const updateSizeItemRow = (
+    sizeIndex: number,
+    rowIndex: number,
+    field: keyof SizeItemForm,
+    value: string,
+  ) => {
+    if (field === "quantity" && !/^\d*$/.test(value)) {
+      return;
+    }
+
+    updateSizeField(sizeIndex, (size) => ({
+      ...size,
+      items: size.items.map((item, currentIndex) =>
+        currentIndex === rowIndex ? { ...item, [field]: value } : item
+      ),
+    }));
+  };
+
+  const removeSizeItemRow = (sizeIndex: number, rowIndex: number) => {
+    updateSizeField(sizeIndex, (size) => {
+      if (size.items.length === 1) {
+        return size;
+      }
+
+      return {
+        ...size,
+        items: size.items.filter((_, currentIndex) => currentIndex !== rowIndex),
+      };
+    });
+  };
+
+  const toggleSizeColor = (
+    sizeIndex: number,
+    channel: keyof SizeForm["colors"],
+    color: string,
+  ) => {
+    updateSizeField(sizeIndex, (size) => {
+      const current = size.colors[channel];
+      return {
+        ...size,
+        colors: {
+          ...size.colors,
+          [channel]: current.includes(color)
+            ? current.filter((item) => item !== color)
+            : [...current, color],
+        },
+      };
+    });
+  };
+
+  const addFillerRow = (sizeIndex: number) => {
+    updateSizeField(sizeIndex, (size) => ({
+      ...size,
+      fillers: [...size.fillers, ""],
+    }));
+  };
+
+  const updateFillerRow = (sizeIndex: number, fillerIndex: number, value: string) => {
+    updateSizeField(sizeIndex, (size) => ({
+      ...size,
+      fillers: size.fillers.map((filler, currentIndex) =>
+        currentIndex === fillerIndex ? value : filler
+      ),
+    }));
+  };
+
+  const removeFillerRow = (sizeIndex: number, fillerIndex: number) => {
+    updateSizeField(sizeIndex, (size) => {
+      if (size.fillers.length === 1) {
+        return size;
+      }
+
+      return {
+        ...size,
+        fillers: size.fillers.filter((_, currentIndex) => currentIndex !== fillerIndex),
+      };
+    });
+  };
+
+  const appendSizeError = (
+    nextSizeErrors: SizeErrors,
+    sizeTemplateId: string,
+    message: string,
+  ) => {
+    nextSizeErrors[sizeTemplateId] = nextSizeErrors[sizeTemplateId]
+      ? `${nextSizeErrors[sizeTemplateId]} ${message}`
+      : message;
+  };
+
+  const validate = (): boolean => {
+    const nextErrors: FormErrors = {};
+    const nextSizeErrors: SizeErrors = {};
+
+    if (!form.product_type_id) nextErrors.product_type_id = "Product type is required";
+    if (form.product_style_ids.length === 0) nextErrors.product_style_ids = "Select at least one product style";
+    if (form.category_ids.length === 0) nextErrors.category_ids = "Select at least one occasion";
+    if (!form.name.trim()) nextErrors.name = "Product name is required";
+    if (!form.short_description.trim()) nextErrors.short_description = "Short description is required";
+    if (!form.description.trim()) nextErrors.description = "Description is required";
+    if (form.media.length === 0) nextErrors.media = "Upload at least one image";
+    if (form.sizes.length === 0) nextErrors.sizes = "Add at least one size configuration";
+
+    form.sizes.forEach((size) => {
+      const validItems = size.items.filter(
+        (item) => item.catalog_item_id && item.quantity.trim() && Number(item.quantity) > 0
+      );
+      const validFillerValues = size.fillers.map((filler) => filler.trim()).filter(Boolean);
+      const sizeTemplate = sizeTemplates.find((template) => template.id === size.size_template_id);
+      const totalQuantity = validItems.reduce((total, item) => total + Number(item.quantity), 0);
+
+      if (validItems.length === 0) {
+        appendSizeError(nextSizeErrors, size.size_template_id, "Add at least one catalog item and quantity.");
+      }
+
+      if (sizeTemplate?.min_items !== null && sizeTemplate?.min_items !== undefined && totalQuantity < sizeTemplate.min_items) {
+        appendSizeError(
+          nextSizeErrors,
+          size.size_template_id,
+          `Total quantity must be at least ${sizeTemplate.min_items}.`,
+        );
+      }
+
+      if (sizeTemplate?.max_items !== null && sizeTemplate?.max_items !== undefined && totalQuantity > sizeTemplate.max_items) {
+        appendSizeError(
+          nextSizeErrors,
+          size.size_template_id,
+          `Total quantity cannot exceed ${sizeTemplate.max_items}.`,
+        );
+      }
+
+      if (
+        size.colors.ribbon.length === 0 ||
+        size.colors.net.length === 0 ||
+        size.colors.product_color.length === 0
+      ) {
+        appendSizeError(nextSizeErrors, size.size_template_id, "Select at least one color in each group.");
+      }
+
+      if (validFillerValues.length === 0) {
+        appendSizeError(nextSizeErrors, size.size_template_id, "Add at least one filler.");
+      }
+    });
+
+    setErrors(nextErrors);
+    setSizeErrors(nextSizeErrors);
+
+    return Object.keys(nextErrors).length === 0 && Object.keys(nextSizeErrors).length === 0;
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (submitGuardRef.current) {
+      return;
+    }
+
+    submitGuardRef.current = true;
+    setApiError("");
+
+    if (!validate()) {
+      submitGuardRef.current = false;
+      return;
+    }
 
     try {
-      const media = form.images.map((file) => ({ image: file }));
+      setIsSubmitting(true);
 
-      const items = form.items
-        .filter((item) => item.name.trim() && item.quantity.trim())
-        .map((item) => ({
-          name: item.name.trim(),
-          quantity: Number(item.quantity),
-        }));
+      const media = await Promise.all(
+        form.media.map(async (mediaItem, index) => ({
+          image: await fileToDataUrl(mediaItem.file),
+          alt_text: mediaItem.alt_text.trim() || `${form.name.trim() || "Product"} image ${index + 1}`,
+          is_primary: mediaItem.is_primary,
+          sort_order: index,
+        }))
+      );
 
-      const payload: CreateProductPayload = {
+      const payload: CreateConfiguredProductPayload = {
         product: {
           product_type_id: form.product_type_id,
           name: form.name.trim(),
           short_description: form.short_description.trim(),
           description: form.description.trim(),
-          tier: form.tier,
-          price: Number(form.price),
-          compare_at_price: Number(form.compare_at_price),
           status: form.status,
         },
-        category_ids: [form.category_id],
-        media,
-        items,
+        product_style_ids: form.product_style_ids,
+        category_ids: form.category_ids,
+        media: media as CreateConfiguredProductPayload["media"],
+        sizes: form.sizes.map((size) => ({
+          size_template_id: size.size_template_id,
+          items: size.items
+            .filter((item) => item.catalog_item_id && item.quantity.trim() && Number(item.quantity) > 0)
+            .map((item) => ({
+              catalog_item_id: item.catalog_item_id,
+              quantity: Number(item.quantity),
+            })),
+          colors: {
+            ribbon: size.colors.ribbon,
+            net: size.colors.net,
+            product_color: size.colors.product_color,
+          },
+          fillers: size.fillers.map((filler) => filler.trim()).filter(Boolean),
+        })) as CreateConfiguredProductPayload["sizes"],
       };
 
       console.log("Submitting product with payload:", payload);
 
-      await productApi.createProduct(payload);
+      await productApi.createProductFull(payload);
       router.push("/admin/products");
+      router.refresh();
     } catch (error) {
       console.error("Create product failed:", error);
       setApiError("Failed to create product.");
     } finally {
       setIsSubmitting(false);
-      isSubmittingRef.current = false;
+      submitGuardRef.current = false;
     }
-  };
-
-  const handleItemChange = (index: number, field: "name" | "quantity", value: string) => {
-    setForm((prev) => ({
-      ...prev,
-      items: prev.items.map((item, i) => (i === index ? { ...item, [field]: value } : item)),
-    }));
-  };
-
-  const addItemRow = () => {
-    setForm((prev) => ({ ...prev, items: [...prev.items, { name: "", quantity: "" }] }));
-  };
-
-  const removeItemRow = (index: number) => {
-    setForm((prev) => {
-      if (prev.items.length === 1) return prev;
-      return { ...prev, items: prev.items.filter((_, i) => i !== index) };
-    });
   };
 
   return (
     <div className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6">
-      {/* Breadcrumb */}
       <nav className="mb-6 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-        <Link href="/admin/products" className="hover:text-gray-700 dark:hover:text-gray-200 transition-colors">Products</Link>
+        <Link href="/admin/products" className="transition-colors hover:text-gray-700 dark:hover:text-gray-200">
+          Products
+        </Link>
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
         </svg>
-        <span className="text-gray-800 dark:text-white/90 font-medium">Add Product</span>
+        <span className="font-medium text-gray-800 dark:text-white/90">Add Product</span>
       </nav>
 
-      {/* Page Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Add New Product</h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Fill in the details below to add a new product to your inventory.</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Build a Product</h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Define the product, attach styles and occasions, then configure one or more sizes with items, colors, and fillers.
+        </p>
       </div>
 
       {apiError && (
@@ -213,322 +588,71 @@ export default function AddProductPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit}>
-        <div className="space-y-6">
-          {/* Basic Info Card */}
-          <div className="rounded-xl border border-gray-200 bg-white dark:border-white/5 dark:bg-white/3 overflow-hidden">
-            <div className="border-b border-gray-100 dark:border-white/5 px-6 py-4">
-              <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">Basic Information</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Core product details and identification</p>
-            </div>
-            <div className="px-6 py-5 grid gap-5 sm:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Product Category <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={form.product_type_id}
-                  disabled={isLoadingOptions}
-                  onChange={(e) => handleChange("product_type_id", e.target.value)}
-                  className={`w-full rounded-xl border px-4 py-2.5 text-sm text-gray-800 dark:text-white/90 bg-white dark:bg-white/3 outline-none transition-all focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-400 ${
-                    errors.product_type_id
-                      ? "border-red-400 dark:border-red-500 focus:ring-red-400"
-                      : "border-gray-200 dark:border-white/10"
-                  }`}
-                >
-                  <option value="">Select product type</option>
-                  {productTypes.map((type) => (
-                    <option key={type.id} value={type.id}>
-                      {type.name}
-                    </option>
-                  ))}
-                </select>
-                {errors.product_type_id && <p className="mt-1.5 text-xs text-red-500">{errors.product_type_id}</p>}
-              </div>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <ProductBasicsSection
+          form={form}
+          errors={errors}
+          isLoadingOptions={isLoadingOptions}
+          productTypes={productTypes}
+          onProductTypeChange={handleProductTypeChange}
+          onNameChange={(value) => updateFormField("name", value)}
+          onShortDescriptionChange={(value) => updateFormField("short_description", value)}
+          onDescriptionChange={(value) => updateFormField("description", value)}
+          onStatusChange={(value) => updateFormField("status", value)}
+        />
 
-              {/* Product Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Product Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => handleChange("name", e.target.value)}
-                  placeholder="e.g. Wireless Headphones"
-                  className={`w-full rounded-xl border px-4 py-2.5 text-sm text-gray-800 dark:text-white/90 placeholder-gray-400 dark:placeholder-gray-500 bg-white dark:bg-white/3 outline-none transition-all focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-400 ${
-                    errors.name
-                      ? "border-red-400 dark:border-red-500 focus:ring-red-400"
-                      : "border-gray-200 dark:border-white/10"
-                  }`}
-                />
-                {errors.name && <p className="mt-1.5 text-xs text-red-500">{errors.name}</p>}
-              </div>
+        <StylesAndOccasionsSection
+          form={form}
+          errors={errors}
+          productStyles={productStyles}
+          categories={categories}
+          isLoadingStyles={isLoadingStyles}
+          onToggle={setToggleArray}
+        />
 
-              {/* Category */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Ocassions <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={form.category_id}
-                  disabled={isLoadingOptions}
-                  onChange={(e) => handleChange("category_id", e.target.value)}
-                  className={`w-full rounded-xl border px-4 py-2.5 text-sm text-gray-800 dark:text-white/90 bg-white dark:bg-white/3 outline-none transition-all focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-400 ${
-                    errors.category_id
-                      ? "border-red-400 dark:border-red-500 focus:ring-red-400"
-                      : "border-gray-200 dark:border-white/10"
-                  }`}
-                >
-                  <option value="">Select a category</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
-                  ))}
-                </select>
-                {errors.category_id && <p className="mt-1.5 text-xs text-red-500">{errors.category_id}</p>}
-              </div>
+        <MediaSection
+          form={form}
+          errors={errors}
+          onMediaFiles={handleMediaFiles}
+          onRemoveMedia={removeMedia}
+          onUpdateAltText={updateMediaAltText}
+          onSetPrimaryMedia={setPrimaryMedia}
+        />
 
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Short Description <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={form.short_description}
-                  onChange={(e) => handleChange("short_description", e.target.value)}
-                  placeholder="Fresh tulip bouquet for spring celebrations"
-                  className={`w-full rounded-xl border px-4 py-2.5 text-sm text-gray-800 dark:text-white/90 placeholder-gray-400 dark:placeholder-gray-500 bg-white dark:bg-white/3 outline-none transition-all focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-400 ${
-                    errors.short_description
-                      ? "border-red-400 dark:border-red-500 focus:ring-red-400"
-                      : "border-gray-200 dark:border-white/10"
-                  }`}
-                />
-                {errors.short_description && <p className="mt-1.5 text-xs text-red-500">{errors.short_description}</p>}
-              </div>
+        <SizesSection
+          form={form}
+          errors={errors}
+          sizeErrors={sizeErrors}
+          selectedSizeTemplateId={selectedSizeTemplateId}
+          availableSizeTemplates={availableSizeTemplates}
+          sizeTemplates={sizeTemplates}
+          catalogItems={catalogItems}
+          onSelectedSizeTemplateChange={setSelectedSizeTemplateId}
+          onAddSizeConfiguration={addSizeConfiguration}
+          onRemoveSizeConfiguration={removeSizeConfiguration}
+          onAddSizeItemRow={addSizeItemRow}
+          onUpdateSizeItemRow={updateSizeItemRow}
+          onRemoveSizeItemRow={removeSizeItemRow}
+          onAddFillerRow={addFillerRow}
+          onUpdateFillerRow={updateFillerRow}
+          onRemoveFillerRow={removeFillerRow}
+          onToggleSizeColor={toggleSizeColor}
+        />
 
-              {/* Description */}
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Description <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  value={form.description}
-                  onChange={(e) => handleChange("description", e.target.value)}
-                  rows={3}
-                  placeholder="Full product description"
-                  className={`w-full rounded-xl border px-4 py-2.5 text-sm text-gray-800 dark:text-white/90 placeholder-gray-400 dark:placeholder-gray-500 bg-white dark:bg-white/3 outline-none transition-all focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-400 resize-none ${
-                    errors.description
-                      ? "border-red-400 dark:border-red-500 focus:ring-red-400"
-                      : "border-gray-200 dark:border-white/10"
-                  }`}
-                />
-                {errors.description && <p className="mt-1.5 text-xs text-red-500">{errors.description}</p>}
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Tier <span className="text-red-500">*</span>
-                </label>
-                <div className="flex flex-wrap gap-3">
-                  {tierOptions.map((tier) => (
-                    <label
-                      key={tier}
-                      className={`flex cursor-pointer items-center gap-2.5 rounded-lg border px-4 py-2.5 text-sm transition-colors ${
-                        form.tier === tier
-                          ? "border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400"
-                          : "border-gray-200 text-gray-600 hover:border-gray-300 dark:border-white/8 dark:text-gray-400 dark:hover:border-white/15"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="tier"
-                        checked={form.tier === tier}
-                        value={tier}
-                        onChange={(e) => handleChange("tier", e.target.value)}
-                        className="sr-only"
-                      />
-                      {tier}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Inventory & Pricing Card */}
-          <div className="rounded-xl border border-gray-200 bg-white dark:border-white/5 dark:bg-white/3 overflow-hidden">
-            <div className="border-b border-gray-100 dark:border-white/5 px-6 py-4">
-              <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">Inventory & Pricing</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Status and pricing details</p>
-            </div>
-            <div className="px-6 py-5 grid gap-5 sm:grid-cols-3">
-              {/* Price */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Price <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400 dark:text-gray-500 pointer-events-none">$</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={form.price}
-                    onChange={(e) => handleChange("price", e.target.value)}
-                    placeholder="24.99"
-                    className={`w-full rounded-xl border pl-8 pr-4 py-2.5 text-sm text-gray-800 dark:text-white/90 placeholder-gray-400 dark:placeholder-gray-500 bg-white dark:bg-white/3 outline-none transition-all focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-400 ${
-                      errors.price
-                        ? "border-red-400 dark:border-red-500 focus:ring-red-400"
-                        : "border-gray-200 dark:border-white/10"
-                    }`}
-                  />
-                </div>
-                {errors.price && <p className="mt-1.5 text-xs text-red-500">{errors.price}</p>}
-              </div>
-
-              {/* Status */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Status</label>
-                <select
-                  value={form.status}
-                  onChange={(e) => handleChange("status", e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 dark:border-white/10 px-4 py-2.5 text-sm text-gray-800 dark:text-white/90 bg-white dark:bg-white/3 outline-none transition-all focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-400"
-                >
-                  {statusOptions.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Compare At Price */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Compare At Price <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400 dark:text-gray-500 pointer-events-none">$</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={form.compare_at_price}
-                    onChange={(e) => handleChange("compare_at_price", e.target.value)}
-                    placeholder="29.99"
-                    className={`w-full rounded-xl border pl-8 pr-4 py-2.5 text-sm text-gray-800 dark:text-white/90 placeholder-gray-400 dark:placeholder-gray-500 bg-white dark:bg-white/3 outline-none transition-all focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-400 ${
-                      errors.compare_at_price
-                        ? "border-red-400 dark:border-red-500 focus:ring-red-400"
-                        : "border-gray-200 dark:border-white/10"
-                    }`}
-                  />
-                </div>
-                {errors.compare_at_price && <p className="mt-1.5 text-xs text-red-500">{errors.compare_at_price}</p>}
-              </div>
-            </div>
-          </div>
-
-          {/* Items Card */}
-          <div className="rounded-xl border border-gray-200 bg-white dark:border-white/5 dark:bg-white/3 overflow-hidden">
-            <div className="border-b border-gray-100 dark:border-white/5 px-6 py-4">
-              <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">Items</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Each item needs a name and quantity</p>
-            </div>
-            <div className="px-6 py-5 space-y-3">
-              {form.items.map((item, index) => (
-                <div key={`item-${index}`} className="grid grid-cols-12 gap-3">
-                  <input
-                    type="text"
-                    value={item.name}
-                    onChange={(e) => handleItemChange(index, "name", e.target.value)}
-                    placeholder="Item name"
-                    className="col-span-7 rounded-xl border border-gray-200 dark:border-white/10 px-4 py-2.5 text-sm text-gray-800 dark:text-white/90 bg-white dark:bg-white/3 outline-none transition-all focus:ring-2 focus:ring-brand-500"
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    value={item.quantity}
-                    onChange={(e) => handleItemChange(index, "quantity", e.target.value)}
-                    placeholder="Qty"
-                    className="col-span-3 rounded-xl border border-gray-200 dark:border-white/10 px-4 py-2.5 text-sm text-gray-800 dark:text-white/90 bg-white dark:bg-white/3 outline-none transition-all focus:ring-2 focus:ring-brand-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeItemRow(index)}
-                    className="col-span-2 rounded-xl border border-gray-200 dark:border-white/10 px-3 py-2.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/6"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-              {errors.items && <p className="text-xs text-red-500">{errors.items}</p>}
-              <button
-                type="button"
-                onClick={addItemRow}
-                className="rounded-xl border border-gray-200 dark:border-white/10 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/6"
-              >
-                Add Item
-              </button>
-            </div>
-          </div>
-
-          {/* Media Card */}
-          <div className="rounded-xl border border-gray-200 bg-white dark:border-white/5 dark:bg-white/3 overflow-hidden">
-            <div className="border-b border-gray-100 dark:border-white/5 px-6 py-4">
-              <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">Media</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Upload one or more images (binary files)</p>
-            </div>
-            <div className="px-6 py-5">
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={(e) => {
-                  const files = Array.from(e.target.files || []);
-                  setForm((prev) => ({ ...prev, images: files }));
-                  setErrors((prev) => {
-                    if (!prev.images) return prev;
-                    const next = { ...prev };
-                    delete next.images;
-                    return next;
-                  });
-                }}
-                className="block w-full text-sm text-gray-700 dark:text-gray-300 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-brand-600 hover:file:bg-brand-100"
-              />
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                {form.images.length > 0 ? `${form.images.length} image(s) selected` : "No images selected"}
-              </p>
-              {errors.images && <p className="mt-1.5 text-xs text-red-500">{errors.images}</p>}
-            </div>
-          </div>
-
-          {/* Form Actions */}
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <Link
-              href="/admin/products"
-              className="inline-flex items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/3 px-6 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/6 transition-colors"
-            >
-              Cancel
-            </Link>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
-            >
-              {isSubmitting ? (
-                <>
-                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                  </svg>
-                  Add Product
-                </>
-              )}
-            </button>
-          </div>
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <Link
+            href="/admin/products"
+            className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-6 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-white/10 dark:bg-white/3 dark:text-gray-300 dark:hover:bg-white/5"
+          >
+            Cancel
+          </Link>
+          <button
+            type="submit"
+            disabled={isSubmitting || isLoadingOptions}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSubmitting ? "Creating..." : "Create Product"}
+          </button>
         </div>
       </form>
     </div>

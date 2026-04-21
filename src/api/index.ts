@@ -15,3 +15,7 @@ export * from './auth/types';
 // Product exports
 export { productApi, ProductApi } from './products/index';
 export * from './products/types';
+
+// Orders exports
+export { ordersApi, OrdersApi } from './orders/index';
+export * from './orders/types';

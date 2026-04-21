@@ -156,7 +156,7 @@ export class AuthAPI {
       return response;
     } catch (error) {
       // Clear tokens if refresh fails
-      await this.clearTokens();
+      // await this.clearTokens();
       apiClient.clearAuthorizationHeader();
       throw error;
     }
@@ -216,7 +216,7 @@ export class AuthAPI {
    * Get current user profile
    */
   async getProfile(): Promise<UserProfile> {
-    return apiClient.get<UserProfile>(`${this.baseEndpoint}/profile`);
+    return apiClient.get<UserProfile>(`/api/user`);
   }
 
   /**
@@ -327,8 +327,10 @@ export class AuthAPI {
   async clearTokens(): Promise<void> {
     try {
       localStorage.removeItem('accessToken');
+      localStorage.removeItem('role');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('tokenTimestamp');
+      localStorage.removeItem('session');
       localStorage.removeItem('rememberMe');
     } catch (error) {
       console.error('Failed to clear tokens:', error);
@@ -378,7 +380,7 @@ export class AuthAPI {
           return await this.getProfile();
         } catch (refreshError) {
           // If refresh fails, clear tokens
-          await this.clearTokens();
+          // await this.clearTokens();
           apiClient.clearAuthorizationHeader();
           throw refreshError;
         }

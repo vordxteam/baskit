@@ -1,149 +1,179 @@
 'use client'
 
-import React, { useState } from 'react'
-import Image from 'next/image'
+import React, { useState, useMemo, useEffect } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import Button from '@/components/ui/button/Button'
 import { Swiper, SwiperSlide } from 'swiper/react'
 import { Pagination, Navigation, Autoplay } from 'swiper/modules'
+import { Heart } from 'lucide-react'
+import { useUserProducts } from '@/hooks/useUserProducts'
+import { useModal } from '@/hooks/useModal'
+import { Favourite } from '@/api/favourite'
+import ImageWithEmptyState from '@/components/ui/ImageWithEmptyState'
+import { addItemToCart, normalizeImageUrl, openCartDrawer } from '@/utils/cart'
+import ConfirmationModal from '@/components/example/ModalExample/ConfirmationModal'
 import 'swiper/css'
 import 'swiper/css/pagination'
 import 'swiper/css/navigation'
 
 type Product = {
-    id: number
+    id: string
     image: string
     name: string
     description: string
     price: string
+    is_favorite: boolean
 }
 
-const products: Product[] = [
-    {
-        id: 1,
-        image: '/images/product1.png',
-        name: 'Sunshine Mix',
-        description: 'Bright, cheerful blooms that bring warmth',
-        price: 'PKR 3,999',
-    },
-    {
-        id: 2,
-        image: '/images/product2.png',
-        name: 'Tropical Vibes',
-        description: 'Exotic blooms full of color and energy',
-        price: 'PKR 6,999',
-    },
-    {
-        id: 3,
-        image: '/images/product3.png',
-        name: 'Pastel Dreams',
-        description: 'Soft pastel flowers creating an elegant look',
-        price: 'PKR 4,999',
-    },
-    {
-        id: 4,
-        image: '/images/product4.png',
-        name: 'Roses & Grace',
-        description: 'A vibrant bouquet for friends and loved ones.',
-        price: 'PKR 2,999',
-    },
-    {
-        id: 5,
-        image: '/images/product5.png',
-        name: 'Joyful Blooms',
-        description: 'A playful mix of fresh seasonal flowers',
-        price: 'PKR 2,999',
-    },
-    {
-        id: 6,
-        image: '/images/product6.png',
-        name: 'Pink Roses',
-        description: 'Classic pink roses arranged to convey love',
-        price: 'PKR 2,999',
-    },
-    {
-        id: 7,
-        image: '/images/product6.png',
-        name: 'Pink Roses',
-        description: 'Classic pink roses arranged to convey love',
-        price: 'PKR 2,999',
+// const products: Product[] = [
+//     {
+//         id: 1,
+//         image: '/images/product1.png',
+//         name: 'Sunshine Mix',
+//         description: 'Bright, cheerful blooms that bring warmth',
+//         price: 'PKR 3,999',
+//     },
+//     {
+//         id: 2,
+//         image: '/images/product2.png',
+//         name: 'Tropical Vibes',
+//         description: 'Exotic blooms full of color and energy',
+//         price: 'PKR 6,999',
+//     },
+//     {
+//         id: 3,
+//         image: '/images/product3.png',
+//         name: 'Pastel Dreams',
+//         description: 'Soft pastel flowers creating an elegant look',
+//         price: 'PKR 4,999',
+//     },
+//     {
+//         id: 4,
+//         image: '/images/product4.png',
+//         name: 'Roses & Grace',
+//         description: 'A vibrant bouquet for friends and loved ones.',
+//         price: 'PKR 2,999',
+//     },
+//     {
+//         id: 5,
+//         image: '/images/product5.png',
+//         name: 'Joyful Blooms',
+//         description: 'A playful mix of fresh seasonal flowers',
+//         price: 'PKR 2,999',
+//     },
+//     {
+//         id: 6,
+//         image: '/images/product6.png',
+//         name: 'Pink Roses',
+//         description: 'Classic pink roses arranged to convey love',
+//         price: 'PKR 2,999',
+//     },
+//     {
+//         id: 7,
+//         image: '/images/product6.png',
+//         name: 'Pink Roses',
+//         description: 'Classic pink roses arranged to convey love',
+//         price: 'PKR 2,999',
 
 
-    },
-    {
-        id: 8,
-        image: '/images/product5.png',
-        name: 'Joyful Blooms',
-        description: 'A playful mix of fresh seasonal flowers',
-        price: 'PKR 2,999',
+//     },
+//     {
+//         id: 8,
+//         image: '/images/product5.png',
+//         name: 'Joyful Blooms',
+//         description: 'A playful mix of fresh seasonal flowers',
+//         price: 'PKR 2,999',
 
 
-    },
-    {
-        id: 9,
-        image: '/images/product3.png',
-        name: 'Pastel Dreams',
-        description: 'Soft pastel flowers creating an elegant look',
-        price: 'PKR 4,999',
-    },
-    {
-        id: 10,
-        image: '/images/product4.png',
-        name: 'Roses & Grace',
-        description: 'A vibrant bouquet for friends and loved ones.',
-        price: 'PKR 2,999',
-    },
-    {
-        id: 11,
-        image: '/images/product2.png',
-        name: 'Tropical Vibes',
-        description: 'Exotic blooms full of color and energy',
-        price: 'PKR 6,999',
-    },
-    {
-        id: 12,
-        image: '/images/product1.png',
-        name: 'Sunshine Mix',
-        description: 'Bright, cheerful blooms that bring warmth',
-        price: 'PKR 3,999',
-    },
-     {
-        id: 13,
-        image: '/images/product6.png',
-        name: 'Pink Roses',
-        description: 'Classic pink roses arranged to convey love',
-        price: 'PKR 2,999',
+//     },
+//     {
+//         id: 9,
+//         image: '/images/product3.png',
+//         name: 'Pastel Dreams',
+//         description: 'Soft pastel flowers creating an elegant look',
+//         price: 'PKR 4,999',
+//     },
+//     {
+//         id: 10,
+//         image: '/images/product4.png',
+//         name: 'Roses & Grace',
+//         description: 'A vibrant bouquet for friends and loved ones.',
+//         price: 'PKR 2,999',
+//     },
+//     {
+//         id: 11,
+//         image: '/images/product2.png',
+//         name: 'Tropical Vibes',
+//         description: 'Exotic blooms full of color and energy',
+//         price: 'PKR 6,999',
+//     },
+//     {
+//         id: 12,
+//         image: '/images/product1.png',
+//         name: 'Sunshine Mix',
+//         description: 'Bright, cheerful blooms that bring warmth',
+//         price: 'PKR 3,999',
+//     },
+//      {
+//         id: 13,
+//         image: '/images/product6.png',
+//         name: 'Pink Roses',
+//         description: 'Classic pink roses arranged to convey love',
+//         price: 'PKR 2,999',
 
 
-    },
-    {
-        id: 14,
-        image: '/images/product5.png',
-        name: 'Joyful Blooms',
-        description: 'A playful mix of fresh seasonal flowers',
-        price: 'PKR 2,999',
+//     },
+//     {
+//         id: 14,
+//         image: '/images/product5.png',
+//         name: 'Joyful Blooms',
+//         description: 'A playful mix of fresh seasonal flowers',
+//         price: 'PKR 2,999',
 
 
-    },
-    {
-        id: 15,
-        image: '/images/product3.png',
-        name: 'Pastel Dreams',
-        description: 'Soft pastel flowers creating an elegant look',
-        price: 'PKR 4,999',
-    },
-    {
-        id: 16,
-        image: '/images/product4.png',
-        name: 'Roses & Grace',
-        description: 'A vibrant bouquet for friends and loved ones.',
-        price: 'PKR 2,999',
-    },
-]
+//     },
+//     {
+//         id: 15,
+//         image: '/images/product3.png',
+//         name: 'Pastel Dreams',
+//         description: 'Soft pastel flowers creating an elegant look',
+//         price: 'PKR 4,999',
+//     },
+//     {
+//         id: 16,
+//         image: '/images/product4.png',
+//         name: 'Roses & Grace',
+//         description: 'A vibrant bouquet for friends and loved ones.',
+//         price: 'PKR 2,999',
+//     },
+// ]
+
 
 const ITEMS_PER_SLIDE = 6
 
-const ProductCard = ({ product }: { product: Product }) => {
-    const [wished, setWished] = useState(false)
+// ---------- Product Card ----------
+const ProductCard = ({
+    product,
+    onFavoriteClick,
+    isFavoriteLoading,
+}: {
+    product: Product
+    onFavoriteClick: (product: Product) => void
+    isFavoriteLoading: boolean
+}) => {
+    const router = useRouter()
+
+    const handleAddToCart = () => {
+        addItemToCart({
+            id: product.id,
+            name: product.name,
+            imageUrl: product.image,
+            priceLabel: product.price,
+            quantity: 1,
+        })
+        openCartDrawer()
+    }
 
     return (
         <div className="flex flex-col items-center text-center space-y-4 sm:space-y-6 group">
@@ -151,30 +181,31 @@ const ProductCard = ({ product }: { product: Product }) => {
             <div className="relative flex h-80 w-full items-center justify-center overflow-hidden px-3 py-5 transition-all duration-300 group-hover:bg-[#ebd9c7] sm:h-[280px] lg:h-80">
                 {/* Wishlist heart */}
                 <button
-                    onClick={() => setWished((w) => !w)}
-                    aria-label="Add to wishlist"
-                    className="absolute top-2 right-2 z-10 w-8 h-8 flex items-center justify-center transition-transform duration-200 hover:scale-110"
+                    type="button"
+                    onClick={() => onFavoriteClick(product)}
+                    disabled={isFavoriteLoading}
+                    className={`absolute top-2 right-2 z-10 flex h-9 w-9 items-center justify-center rounded-full transition-transform hover:scale-110 ${isFavoriteLoading ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'}`}
+                    aria-label={product.is_favorite ? 'Remove from favourites' : 'Add to favourites'}
                 >
-                    <svg
-                        width="22"
-                        height="22"
-                        viewBox="0 0 24 24"
-                        fill={wished ? '#e05c5c' : 'none'}
-                        stroke={wished ? '#e05c5c' : '#252525'}
-                        strokeWidth="1.5"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-                    </svg>
+                    <Heart
+                        size={24}
+                        strokeWidth={1.8}
+                        className="transition-colors duration-150"
+                        fill={product.is_favorite ? 'red' : 'transparent'}
+                        stroke={product.is_favorite ? '#393A1B' : '#252525'}
+                    />
                 </button>
 
-                <Image
-                    src={product.image}
-                    width={413}
-                    height={420}
-                    alt={product.name}
-                    className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.03]"
-                />
+                <Link href={`/product/${product.id}`} className="block h-full w-full">
+                    <div className="relative h-full w-full">
+                        <ImageWithEmptyState
+                            src={product.image}
+                            alt={product.name}
+                            className="object-contain transition-transform duration-300 group-hover:scale-[1.03]"
+                            sizes="(max-width: 1024px) 50vw, 33vw"
+                        />
+                    </div>
+                </Link>
             </div>
 
             {/* Info */}
@@ -194,7 +225,13 @@ const ProductCard = ({ product }: { product: Product }) => {
 
             {/* Button */}
             <div className="w-full">
-                <Button variant="primary" className="w-full">
+                <Button
+                    variant="primary"
+                    className="w-full"
+                    onClick={() => {
+                        router.push(`/product/${product.id}`)
+                    }}
+                >
                     Add to Baskit
                 </Button>
             </div>
@@ -203,7 +240,76 @@ const ProductCard = ({ product }: { product: Product }) => {
 }
 
 const SignatureBouquet = () => {
+    const router = useRouter()
+    const { isOpen, openModal, closeModal } = useModal()
+
+    // Fetch BOUQUET products from API
+    const { data: apiProducts, isLoading } = useUserProducts({ product_type: 'BOUQUET' })
+
+    // Favorite functionality state
+    const [canUseFavourites, setCanUseFavourites] = useState(false)
+    const [favouriteLoadingId, setFavouriteLoadingId] = useState<string | null>(null)
+    const [favouriteOverrides, setFavouriteOverrides] = useState<Record<string, boolean>>({})
+    const favouriteApi = new Favourite()
+
+    // Check if user can use favourites (logged in as CUSTOMER)
+    useEffect(() => {
+        const syncFavouriteAccess = () => {
+            const token = localStorage.getItem('accessToken')
+            const role = (localStorage.getItem('role') || '').toUpperCase()
+            setCanUseFavourites(Boolean(token) && role === 'CUSTOMER')
+        }
+
+        syncFavouriteAccess()
+
+        const handleStorage = () => {
+            syncFavouriteAccess()
+        }
+
+        window.addEventListener('storage', handleStorage)
+
+        return () => {
+            window.removeEventListener('storage', handleStorage)
+        }
+    }, [])
+
+    // Map API products to UI Product type
+    const products: Product[] = useMemo(() => {
+        return apiProducts.map((apiProduct: any) => {
+            const imageUrl = apiProduct.image_url || apiProduct.base_image_url
+            const normalized = normalizeImageUrl(imageUrl)
+            return {
+                id: apiProduct.id,
+                image: normalized || '/images/product1.png',
+                name: apiProduct.name,
+                description: apiProduct.short_description || apiProduct.description || '',
+                price: apiProduct.price,
+                is_favorite: favouriteOverrides[apiProduct.id] ?? Boolean(apiProduct.is_favorite),
+            }
+        })
+    }, [apiProducts, favouriteOverrides])
+
     const showSlider = products.length > ITEMS_PER_SLIDE
+
+    const handleFavoriteClick = async (product: Product) => {
+        if (!canUseFavourites) {
+            openModal()
+            return
+        }
+
+        try {
+            setFavouriteLoadingId(product.id)
+            await favouriteApi.addToFavourites(product.id)
+            setFavouriteOverrides((prev) => ({
+                ...prev,
+                [product.id]: !product.is_favorite,
+            }))
+        } catch (error) {
+            console.error('Failed to toggle product favourite:', error)
+        } finally {
+            setFavouriteLoadingId((prev) => (prev === product.id ? null : prev))
+        }
+    }
 
     return (
         <>
@@ -246,48 +352,88 @@ const SignatureBouquet = () => {
                     </p>
                 </div>
 
-                {/* Grid or Slider */}
-                {showSlider ? (
-                    <Swiper
-                        modules={[Pagination, Navigation, Autoplay]}
-                        slidesPerView={1}
-                        pagination={{ clickable: true }}
-                        autoplay={{
-                            delay: 7000,
-                            disableOnInteraction: false,
-                            pauseOnMouseEnter: true,
-                        }}
-                        speed={900}
-                        loop
-                        className="bouquet-swiper"
-                    >
-                        {/* Chunk products into groups of 6 */}
-                        {Array.from(
-                            { length: Math.ceil(products.length / ITEMS_PER_SLIDE) },
-                            (_, slideIndex) => (
-                                <SwiperSlide key={slideIndex}>
-                                    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-10 sm:gap-y-12 lg:gap-y-16">
-                                        {products
-                                            .slice(
-                                                slideIndex * ITEMS_PER_SLIDE,
-                                                slideIndex * ITEMS_PER_SLIDE + ITEMS_PER_SLIDE
-                                            )
-                                            .map((product) => (
-                                                <ProductCard key={product.id} product={product} />
-                                            ))}
-                                    </div>
-                                </SwiperSlide>
-                            )
-                        )}
-                    </Swiper>
-                ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-10 sm:gap-y-12 lg:gap-y-16">
-                        {products.map((product) => (
-                            <ProductCard key={product.id} product={product} />
-                        ))}
+                {/* 🔄 Loading State */}
+                {isLoading && (
+                    <div className="text-center py-20 text-gray-500">
+                        Loading products...
                     </div>
                 )}
+
+                {/* ❌ Empty State */}
+                {!isLoading && products.length === 0 && (
+                    <div className="text-center py-20 text-gray-500">
+                        No products found.
+                    </div>
+                )}
+
+                {/* ✅ Products Grid or Slider */}
+                {!isLoading && products.length > 0 && (
+                    <>
+                        {showSlider ? (
+                            <Swiper
+                                modules={[Pagination, Navigation, Autoplay]}
+                                slidesPerView={1}
+                                pagination={{ clickable: true }}
+                                autoplay={{
+                                    delay: 7000,
+                                    disableOnInteraction: false,
+                                    pauseOnMouseEnter: true,
+                                }}
+                                speed={900}
+                                loop
+                                className="bouquet-swiper"
+                            >
+                                {/* Chunk products into groups of 6 */}
+                                {Array.from(
+                                    { length: Math.ceil(products.length / ITEMS_PER_SLIDE) },
+                                    (_, slideIndex) => (
+                                        <SwiperSlide key={slideIndex}>
+                                            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-10 sm:gap-y-12 lg:gap-y-16">
+                                                {products
+                                                    .slice(
+                                                        slideIndex * ITEMS_PER_SLIDE,
+                                                        slideIndex * ITEMS_PER_SLIDE + ITEMS_PER_SLIDE
+                                                    )
+                                                    .map((product) => (
+                                                        <ProductCard
+                                                            key={product.id}
+                                                            product={product}
+                                                            onFavoriteClick={handleFavoriteClick}
+                                                            isFavoriteLoading={favouriteLoadingId === product.id}
+                                                        />
+                                                    ))}
+                                            </div>
+                                        </SwiperSlide>
+                                    )
+                                )}
+                            </Swiper>
+                        ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-10 sm:gap-y-12 lg:gap-y-16">
+                                {products.map((product) => (
+                                    <ProductCard
+                                        key={product.id}
+                                        product={product}
+                                        onFavoriteClick={handleFavoriteClick}
+                                        isFavoriteLoading={favouriteLoadingId === product.id}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </>
+                )}
             </section>
+
+            {/* Login Required Modal */}
+            <ConfirmationModal
+                isOpen={isOpen}
+                onClose={closeModal}
+                onConfirm={() => router.push('/signin')}
+                title="Login required"
+                message="You need to login to enable this feature."
+                confirmLabel="Sign In"
+                cancelLabel="Close"
+                variant="info"
+            />
         </>
     )
 }

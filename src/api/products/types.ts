@@ -211,8 +211,48 @@ export interface CreateProductPayload {
   items: Item[];
 }
 
+export interface CreateConfiguredProductMediaPayload {
+	image: string;
+	alt_text: string;
+	is_primary: boolean;
+	sort_order: number;
+}
+
+export interface CreateConfiguredProductSizeItemPayload {
+	catalog_item_id: UUID;
+	quantity: number;
+}
+
+export interface CreateConfiguredProductSizeColorsPayload {
+	ribbon: string[];
+	net: string[];
+	product_color: string[];
+}
+
+export interface CreateConfiguredProductSizePayload {
+	size_template_id: UUID;
+	items: CreateConfiguredProductSizeItemPayload[];
+	colors: CreateConfiguredProductSizeColorsPayload;
+	fillers: string[];
+}
+
+export interface CreateConfiguredProductPayload {
+	product: {
+		product_type_id: UUID;
+		name: string;
+		short_description: string;
+		description: string;
+		status: "ACTIVE" | "INACTIVE";
+	};
+	product_style_ids: UUID[];
+	category_ids: UUID[];
+	media: CreateConfiguredProductMediaPayload[];
+	sizes: CreateConfiguredProductSizePayload[];
+}
+
 export interface Product {
   product_type_id: string; // UUID
+	product_style_id: string; // UUID
   name: string;
   short_description: string;
   description: string;
@@ -346,6 +386,7 @@ export interface CreateProductFullPayload {
 export interface UpdateProductFullPayload {
 	product: FullProductCorePayload;
 	category_ids: UUID[];
+	media: FullProductMediaPayload[];
 	sizes: FullProductSizePayload[];
 	components: FullProductComponentPayload[];
 	customization_rules: FullProductCustomizationRulePayload[];
@@ -512,6 +553,20 @@ export const UPDATE_PRODUCT_FULL_PAYLOAD_EXAMPLE: UpdateProductFullPayload = {
 			occasion: 'birthday',
 		},
 	},
+	media: [
+		{
+			media_url: 'https://example.com/images/bouquet-main.jpg',
+			alt_text: 'Main bouquet image',
+			sort_order: 0,
+			is_primary: true,
+		},
+		{
+			media_url: 'https://example.com/images/bouquet-side.jpg',
+			alt_text: 'Side bouquet image',
+			sort_order: 1,
+			is_primary: false,
+		},
+	],
 	category_ids: ['019d71d0-e570-70bf-a0c9-fe453a02d710', '019d71d3-63f6-7378-aaeb-21bc3e57596c'],
 	sizes: [
 		{

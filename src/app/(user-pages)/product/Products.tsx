@@ -1,25 +1,13 @@
-'use client'
-
-import { UserProduct } from '@/api/userProducts'
 import ProductGrid from '@/components/ui/ProductGrid'
-import { useEffect } from 'react'
+import type { ApiProduct } from '@/api/userProducts/types'
 
-const AllProducts = () => {
-    useEffect(() => {
-        const fetchProducts = async () => {
-            try {
-                const userProductApi = new UserProduct()
-                const res = await userProductApi.getUserProducts()
-                console.log(res)
-            } catch (error) {
-                console.error('Failed to fetch products:', error)
-            }
-        }
+type AllProductsProps = {
+    products: ApiProduct[]
+    onRefresh?: () => void | Promise<void>
+}
 
-        fetchProducts()
-    }, [])
-
-    return <ProductGrid />
+const AllProducts = ({ products, onRefresh }: AllProductsProps) => {
+    return <ProductGrid products={products} onRefresh={onRefresh} />
 }
 
 export default AllProducts

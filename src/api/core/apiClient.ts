@@ -208,6 +208,11 @@ export class ApiClient {
         ...(config.headers || {}),
       };
 
+      if (config.body instanceof FormData) {
+        delete mergedHeaders['Content-Type'];
+        delete mergedHeaders['content-type'];
+      }
+
       if (token && shouldAttachAuth && !mergedHeaders.Authorization) {
         mergedHeaders.Authorization = `Bearer ${token}`;
       }
@@ -307,10 +312,15 @@ export class ApiClient {
       }
 
       // Build request config
+      const isFormDataBody = typeof FormData !== 'undefined' && options.body instanceof FormData;
       let config: RequestConfig = {
         method,
         headers: options.headers,
-        body: options.body ? JSON.stringify(options.body) : undefined,
+        body: isFormDataBody
+          ? options.body
+          : options.body
+            ? JSON.stringify(options.body)
+            : undefined,
         credentials: options.credentials || 'include',
       };
 
@@ -405,6 +415,7 @@ export const apiClient = new ApiClient({
   baseURL: API_BASE_URL,
   timeout: 30000,
   headers: {
+    'Accept': 'application/json',
     'Content-Type': 'application/json',
   },
 });

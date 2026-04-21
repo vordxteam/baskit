@@ -1,7 +1,10 @@
 import Button from "@/components/ui/button/Button";
+import { useRouter } from "next/navigation";
 import React from "react";
 
 const FeatureBanner = () => {
+    const router = useRouter();
+
     return (
         <section className="relative w-full h-[520px] md:h-[600px] lg:h-[700px] overflow-hidden">
 
@@ -32,7 +35,7 @@ const FeatureBanner = () => {
                     </h2>
 
                     {/* CTA */}
-                    <Button variant="primary">
+                    <Button onClick={() => router.push('/gift-hampers')} variant="primary">
                         Order your Baskit
                     </Button>
                 </div>

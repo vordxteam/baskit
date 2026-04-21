@@ -8,7 +8,7 @@ const HeroSection = () => {
 
       {/* Content */}
       <div
-        className="relative max-w-[732px] backdrop-blur-[10px] min-h-[451px] z-10 mx-auto flex items-center justify-center px-5 py-16 text-center sm:px-8 sm:py-10"
+        className="relative max-w-[800px] backdrop-blur-[10px] min-h-[451px] z-10 mx-auto flex items-center justify-center px-5 py-16 text-center sm:px-8 sm:py-10"
         style={{
           background:
             "linear-gradient(90deg, rgba(255, 255, 255, 0.00) 22.13%, rgba(255, 255, 255, 0.06) 52.17%, rgba(255, 255, 255, 0.00) 82.4%)",
@@ -20,8 +20,8 @@ const HeroSection = () => {
           </p>
 
           <h1 className="text-[#252525] tobia-normal leading-[52px] text-[44px] mb-15">
-            Want something truly personal?
-            Customize your bouquet or basket your way.
+          Want something truly personal?
+Customize your gift hamper your way.
           </h1>
           <Link href="/get-a-qoute">
           

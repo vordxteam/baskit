@@ -31,6 +31,59 @@
   font-weight: 700;
 }
 
+/* Regular */
+@font-face {
+  font-family: "Helvetica Neue";
+  src: url("../newfont/HelveticaNeue-Roman.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+/* Bold */
+@font-face {
+  font-family: "Helvetica Neue";
+  src: url("../newfont/HelveticaNeue-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+}
+
+/* Light */
+@font-face {
+  font-family: "Helvetica Neue";
+  src: url("../newfont/HelveticaNeue-Thin.otf") format("opentype");
+  font-weight: 300;
+  font-style: normal;
+}
+
+/* Medium */
+@font-face {
+  font-family: "Helvetica Neue";
+  src: url("../newfont/HelveticaNeue-Medium.otf") format("opentype");
+  font-weight: 500;
+  font-style: normal;
+}
+
+/* Black */
+/* @font-face {
+  font-family: "Helvetica Neue";
+  src: url("../fonts/HelveticaNeueBlack.otf") format("opentype");
+  font-weight: 900;
+  font-style: normal;
+} */
+
+/* Italic */
+/* @font-face {
+  font-family: "Helvetica Neue";
+  src: url("../fonts/HelveticaNeueItalic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+} */
+
+ body {
+    font-family: "Helvetica Neue", sans-serif;
+    font-weight: 400;
+  }
+
 @custom-variant dark (&:is(.dark *));
 
 @theme {

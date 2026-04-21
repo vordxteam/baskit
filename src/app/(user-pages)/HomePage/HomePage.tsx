@@ -6,6 +6,7 @@ import SignatureBuquet from './SignatureBuquet'
 import HowToCreate from './HowToCreate'
 import BaskitCollection from './BaskitCollection'
 import FeatureBanner from './FeatureBanner'
+import USP from './USP'
 
 const HomePage = () => {
   return (
@@ -17,6 +18,7 @@ const HomePage = () => {
       <HowToCreate />
       <BaskitCollection />
       <FeatureBanner />
+      <USP />
     </div>
   )
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Table,
@@ -47,15 +47,19 @@ interface ApiProduct {
 interface ProductsApiResponse {
   success?: boolean;
   message?: string;
-  data?: ApiProduct[];
+  data?: {
+    data?: ApiProduct[];
+    pagination?: {
+      total?: number;
+      per_page?: number;
+      current_page?: number;
+      last_page?: number;
+    };
+  };
 }
 
-const mapApiProducts = (apiProducts: any): Product[] => {
-  const productsArray = Array.isArray(apiProducts)
-    ? apiProducts
-    : apiProducts?.data || apiProducts?.products || [];
-
-  return productsArray.map((item: ApiProduct) => {
+const mapApiProducts = (apiProducts: ApiProduct[]): Product[] => {
+  return apiProducts.map((item) => {
     const numericPrice = Number(item.price ?? 0);
     const safePrice = Number.isFinite(numericPrice) ? numericPrice : 0;
     const stock = (item.sizes || []).reduce(
@@ -90,25 +94,42 @@ export default function ProductsTable() {
   const [fetchError, setFetchError] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteModal, setDeleteModal] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+  const [pagination, setPagination] = useState({
+    total: 0,
+    perPage: 20,
+    lastPage: 1,
+  });
 
-  const itemsPerPage = 10;
-  const totalPages = Math.max(1, Math.ceil(products.length / itemsPerPage));
+  const itemsPerPage = pagination.perPage;
+  const totalPages = Math.max(1, pagination.lastPage);
+  const showingFrom = pagination.total === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+  const showingTo = pagination.total === 0 ? 0 : Math.min(currentPage * itemsPerPage, pagination.total);
 
   useEffect(() => {
     let isMounted = true;
+    const requestPerPage = 20;
 
     const fetchProducts = async () => {
       setIsLoading(true);
       setFetchError("");
 
       try {
-        const res = await productApi.getAdminProducts<ProductsApiResponse>();
-        const mapped = mapApiProducts(res.data || []);
+        const res = await productApi.getAdminProducts<ProductsApiResponse>({
+          page: currentPage,
+          per_page: requestPerPage,
+        });
+        const apiProducts = res.data?.data || [];
+        const mapped = mapApiProducts(apiProducts);
+        const apiPagination = res.data?.pagination;
 
         if (!isMounted) return;
 
         setProducts(mapped);
-        setCurrentPage(1);
+        setPagination({
+          total: apiPagination?.total ?? mapped.length,
+          perPage: apiPagination?.per_page ?? requestPerPage,
+          lastPage: Math.max(1, apiPagination?.last_page ?? 1),
+        });
       } catch (error) {
         if (!isMounted) return;
 
@@ -126,12 +147,7 @@ export default function ProductsTable() {
     return () => {
       isMounted = false;
     };
-  }, []);
-
-  const paginatedData = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return products.slice(startIndex, startIndex + itemsPerPage);
-  }, [currentPage, products]);
+  }, [currentPage]);
 
   const handleDeleteConfirm = () => {
     const productId = deleteModal.id;
@@ -143,12 +159,19 @@ export default function ProductsTable() {
         setFetchError("");
         await productApi.deleteProduct(productId);
 
-        setProducts((prev) => {
-          const next = prev.filter((p) => p.id !== productId);
-          const nextTotalPages = Math.max(1, Math.ceil(next.length / itemsPerPage));
-          setCurrentPage((prevPage) => Math.min(prevPage, nextTotalPages));
-          return next;
-        });
+        if (products.length === 1 && currentPage > 1) {
+          setCurrentPage((prevPage) => Math.max(1, prevPage - 1));
+        } else {
+          setProducts((prev) => prev.filter((p) => p.id !== productId));
+          setPagination((prev) => {
+            const nextTotal = Math.max(0, prev.total - 1);
+            return {
+              ...prev,
+              total: nextTotal,
+              lastPage: Math.max(1, Math.ceil(nextTotal / prev.perPage)),
+            };
+          });
+        }
       } catch (error) {
         console.error("Delete product failed:", error);
         setFetchError("Failed to delete product. Please try again.");
@@ -163,9 +186,9 @@ export default function ProductsTable() {
 
   return (
     <>
-      <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+      <div className="rounded-xl border border-gray-200 bg-white dark:border-white/5 dark:bg-white/3">
         {/* Header */}
-        <div className="flex flex-col gap-3 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-white/[0.05]">
+        <div className="flex flex-col gap-3 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-white/5">
           <div>
             <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">Products</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400">Manage your product inventory, stock, and pricing</p>
@@ -209,7 +232,7 @@ export default function ProductsTable() {
         <div className="hidden md:block max-w-full overflow-x-auto">
           <div className="min-w-[860px]">
             <Table>
-              <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+              <TableHeader className="border-b border-gray-100 dark:border-white/5">
                 <TableRow>
                   <TableCell isHeader className="px-5 py-3 text-left text-theme-xs font-medium text-gray-500 dark:text-gray-400">Product</TableCell>
                   <TableCell isHeader className="px-5 py-3 text-left text-theme-xs font-medium text-gray-500 dark:text-gray-400">SKU</TableCell>
@@ -221,8 +244,8 @@ export default function ProductsTable() {
                 </TableRow>
               </TableHeader>
 
-              <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-                {paginatedData.map((item) => (
+              <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
+                {products.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell className="px-5 py-4 text-start">
                       <div className="min-w-0">
@@ -290,8 +313,8 @@ export default function ProductsTable() {
 
         {/* Mobile Cards */}
         <div className="grid gap-4 p-4 md:hidden">
-          {paginatedData.map((item) => (
-            <div key={item.id} className="rounded-xl border border-gray-200 bg-white p-4 dark:border-white/[0.05] dark:bg-white/[0.03]">
+          {products.map((item) => (
+            <div key={item.id} className="rounded-xl border border-gray-200 bg-white p-4 dark:border-white/5 dark:bg-white/3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <h4 className="truncate text-sm font-semibold text-gray-800 dark:text-white/90">{item.product.name}</h4>
@@ -345,15 +368,15 @@ export default function ProductsTable() {
         </div>
 
         {/* Pagination */}
-        <div className="border-t border-gray-100 px-4 py-4 sm:px-5 dark:border-white/[0.05]">
+        <div className="border-t border-gray-100 px-4 py-4 sm:px-5 dark:border-white/5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-gray-500 dark:text-gray-400">
               Showing{" "}
-              <span className="font-medium text-gray-700 dark:text-white/90">{(currentPage - 1) * itemsPerPage + 1}</span>{" "}
+              <span className="font-medium text-gray-700 dark:text-white/90">{showingFrom}</span>{" "}
               to{" "}
-              <span className="font-medium text-gray-700 dark:text-white/90">{Math.min(currentPage * itemsPerPage, products.length)}</span>{" "}
+              <span className="font-medium text-gray-700 dark:text-white/90">{showingTo}</span>{" "}
               of{" "}
-              <span className="font-medium text-gray-700 dark:text-white/90">{products.length}</span>{" "}
+              <span className="font-medium text-gray-700 dark:text-white/90">{pagination.total}</span>{" "}
               products
             </p>
             <div className="overflow-x-auto">

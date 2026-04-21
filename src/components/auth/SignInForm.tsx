@@ -18,7 +18,7 @@ export default function SignInForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  
+
   async function handleSignIn(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
@@ -37,6 +37,8 @@ export default function SignInForm() {
         rememberMe: isChecked,
       });
 
+      console.log("Sign-in response:", response);
+
       if (response?.data?.user?.verified === false) {
         setError("Please verify your email before signing in.");
         setIsLoading(false);
@@ -44,8 +46,17 @@ export default function SignInForm() {
       }
 
       if (response?.data.access_token) {
+        const role = (response?.data?.user?.role || "").toUpperCase();
+        if (role) {
+          localStorage.setItem("role", role);
+        }
+
+        if (role === "ADMIN") {
+          router.push("/admin");
+        } else {
+          router.push("/");
+        }
         // Redirect to dashboard on successful login
-        router.push("/admin");
       } else {
         setError(response?.message || "Failed to sign in. Please try again.");
       }
@@ -156,7 +167,7 @@ export default function SignInForm() {
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
-                   
+
                   </div>
                   <Link
                     href="/forgot-password"
@@ -190,5 +201,5 @@ export default function SignInForm() {
     </div>
   );
 
- 
+
 }

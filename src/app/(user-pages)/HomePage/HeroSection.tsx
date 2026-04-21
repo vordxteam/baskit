@@ -1,8 +1,13 @@
+'use client'
+
 import Button from '@/components/ui/button/Button'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import React from 'react'
 
 const HeroSection = () => {
+
+  const router = useRouter()
   return (
     <div className='border-b border-[#25252533] bg-[url("/images/bgvector.png")] bg-top-left lg:bg-bottom-right bg-no-repeat'>
       
@@ -30,7 +35,7 @@ const HeroSection = () => {
                 <path d="M7.3786 31.7233C..." fill="#252525"/>
               </svg>
             </div>
-
+           <Image src="/images/icons/hero-star.svg" width={36} height={36} alt="star" />
             {/* TEXT */}
             <div className='mt-5 space-y-4'>
               <h1 className='text-[#252525] text-[32px] sm:text-[40px] lg:text-[56px] leading-[40px] sm:leading-[48px] lg:leading-[60px] tobia-normal'>
@@ -44,11 +49,11 @@ const HeroSection = () => {
 
             {/* BUTTONS */}
             <div className='flex flex-col sm:flex-row items-start sm:items-center gap-3 mt-8 lg:mt-[60px]'>
-              <Button variant='primary' className='w-full sm:w-auto'>
+              <Button onClick={() => router.push('/product')} variant='primary' className='w-full sm:w-auto'>
                 Shop now
               </Button>
 
-              <Button variant='outline' className='w-full sm:w-auto'>
+              <Button onClick={() => router.push("/get-a-qoute")} variant='outline' className='w-full sm:w-auto'>
                 Customize your Baskit
               </Button>
             </div>

@@ -6,6 +6,7 @@ export type ProductDetail = {
   price: string
   description: string
   includes: string[]
+  short_description?: string
   image: string
   sections: {
     number: string
