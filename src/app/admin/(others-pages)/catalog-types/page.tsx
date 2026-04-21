@@ -33,7 +33,7 @@ export default function CatalogTypesPage() {
     return items
       .map((item) => {
         const label = (item.label ?? item.name ?? item.code ?? item.id ?? "").toString().trim();
-        const value = (item.value ?? item.code ?? item.id ?? item.name ?? "").toString().trim();
+        const value = (item.id ?? item.value ?? item.code ?? item.name ?? "").toString().trim();
 
         if (!label || !value) {
           return null;

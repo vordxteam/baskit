@@ -39,6 +39,7 @@ const guestPublicRouteBases = [
   "/bouqets-customization",
   "/checkout",
   "/shipping",
+  "/about",
   "/top-selling",
   "/bouqets-summary",
   "/basket-summary",
